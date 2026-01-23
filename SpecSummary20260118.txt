@@ -1,29 +1,30 @@
 プロジェクト名：ene1用ハンドルコントローラ
 作成日：2026-01-18
+最終更新日：2026-01-23
 
 ■ 1. 概要
 PC用レーシングシミュレーション（Assetto Corsa等）と組み合わせて使用する、自作ハンドルコントローラの組込みコントローラ仕様書。
 本デバイスはUSB HID（Joystick）としてPCに認識され、ハンドルの回転角、アクセル・ブレーキの踏み込み量、およびシフト操作を送信する。
 
 ■ 2. 使用ハードウェア
-・マイコン: Arduino Pro Micro (ATmega32U4, 5V/16MHz)
+・マイコン: AE-RP2040 (RP2040)
 ・ハンドルセンサ・アクチュエータ: LKTECH MF4015 (CAN接続)
-・CANコントローラ: MCP2515 (SPI接続, CS: Pin 10, Clock: 8MHz)
-・アクセル: EVスクータ用スロットル (電圧出力 0.8V - 4.2V)
+・CANコントローラ: MCP2515 (SPI接続, CS: Pin 17, Clock: 8MHz)
+・アクセル: EVスクータ用スロットル (電圧出力 0.5V - 2.8V)
 ・ブレーキ: 抵抗式面圧センサ (FSR, 引っ張ると抵抗が減少するプルアップ回路構成)
 ・シフトスイッチ: 有接点スイッチ (アップ/ダウン 各1個)
 
 ■ 3. ピンアサイン
 | ピン番号 | 信号名 | 機能 | 備考 |
 | :--- | :--- | :--- | :--- |
-| D6 | S-Up Button | デジタル入力 (DI) | Active Low, 内部プルアップ |
-| D7 | S-Down Button | デジタル入力 (DI) | Active Low, 内部プルアップ |
-| A0 | Brake | アナログ入力 (AI) | 面圧センサ入力 (Hi-R -> Lo-R) |
-| A1 | Accel | アナログ入力 (AI) | 電圧入力 (0.8V - 4.2V相当) |
-| D10 | CAN_CS | SPI CS | MCP2515 制御用 |
-| D14 | SPI_SCK | SPI Clock | |
-| D15 | SPI_MOSI | SPI MOSI | |
-| D16 | SPI_MISO | SPI MISO | |
+| 25 | S-Up Button | デジタル入力 (DI) | Active Low, 内部プルアップ |
+| 24 | S-Down Button | デジタル入力 (DI) | Active Low, 内部プルアップ |
+| ADC0 | Brake | アナログ入力 (AI) | 面圧センサ入力 (Hi-R -> Lo-R) |
+| ADC1 | Accel | アナログ入力 (AI) | 電圧入力 (0.5V - 2.8V相当) |
+| 17 | CAN_CS | SPI CS | MCP2515 制御用 |
+| 18 | SPI_SCK | SPI Clock | |
+| 19 | SPI_TX | SPI_TX | |
+| 16 | SPI_RX | SPI RX | |
 
 ■ 4. 制御仕様
 4.1 通信・周期
@@ -38,7 +39,7 @@ PC用レーシングシミュレーション（Assetto Corsa等）と組み合�
 ・有効範囲: ±30度分を使用（-5461 ～ 5461）
 
 4.3 アクセル (Accelerator)
-・入力電圧範囲: 約0.8V ～ 4.2V
+・入力電圧範囲: 約0.5V ～ 2.8V
 ・ADC読取範囲: 160 ～ 840 (10bit基準)
 
 4.4 ブレーキ (Brake)
