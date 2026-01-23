@@ -1,177 +1,199 @@
-//Utilitys to USE MF4015 with CAN
-// abstract:
-// This library is commands for MF4015 ,using with arduino-mcp2515
-// refers:
-// SHANGHAI LINGKONG TECHNOLOGY CO.,LTD CAN PROTOCOL V2.35 
-// http://en.lkmotor.cn/upload/20230706100134f.pdf
-// arduino-mcp2515
-// https://github.com/autowp/arduino-mcp2515
-// Step 1: get encode date to get Steering angle.
-// Step 2: Set torque to use Steering FFB.
+/**
+ * @file mf4015.cpp
+ * @brief LKTECH MF4015 ステアリングモーター制御ライブラリ
+ * @date 2026-01-23
+ *
+ * MF4015ステアリングモーターをCAN通信で制御するためのライブラリです。
+ * CANInterfaceを通じて通信を行い、具体的なCAN実装には依存しません。
+ *
+ * ## 主な機能
+ * - モーターのON/OFF制御
+ * - エンコーダ値の読み取り
+ * - トルク制御（FFB用）
+ * - モーター状態の読み取り
+ *
+ * ## 参考資料
+ * - LKTECH CAN Protocol V2.35: http://en.lkmotor.cn/upload/20230706100134f.pdf
+ */
 
-#define MCP2515_CS 10
+#include "CANInterface.h"
+#include "config.h"
+#include <Arduino.h>
 
-#include <mcp2515.h>
-MCP2515 mcp2515_mf(MCP2515_CS);
-struct can_frame MFcanMsg ;
+// ============================================================================
+// グローバル変数
+// ============================================================================
 
-#define CmdMotorOff 	0x80	//Motor off command
-#define CmdMotorOn  	0x88	//Motor on command
-#define CmdMotorStop	0x81	//Motor stop command
-#define CmdOpnLoop  	0xA0	//Open loop control command
-#define CmdClsTrqu  	0xA1	//Torque closed loop control command
-#define CmdReadEnc  	0x90	//Read encoder command
-#define CmdReadStat1	0x9A	//Read motor state 1 and error state command
-#define CmdClearErr 	0x9B	//Clear motor error state
-#define CmdReadStat2	0x9C	//Read motor state 2 command
+// CANインターフェース（main.cppで初期化されたインスタンスを受け取る）
+CANInterface *canBus = nullptr;
 
+// エンコーダ値（最後に受信した値）
+uint16_t EncValue = 0;
 
-//Setup MF on CAN-bus
-void SetupMCP2515_MF(){
-  //to setup mcp2515
-  mcp2515_mf.reset();
-  mcp2515_mf.setBitrate(CAN_500KBPS, MCP_8MHZ); //Clock 8MHz, 500kBPS
-  //mcp2515_mf.setBitrate(CAN_500KBPS);
-  mcp2515_mf.setNormalMode();
-}
+// ============================================================================
+// LKTECHプロトコル コマンド定義
+// ============================================================================
 
-#define MF_ID 1		//
-// The command frame and reply frame message format are as follows:
-// Identifier:0x140 + ID(1~32)
-// Frame format: data frame
-// Frame type: standard frame
-// DLC:8bytes
-uint32_t MFcanid = 0x140 + MF_ID;
-uint8_t MFcandlc = 8;	//DLC:8bytes
-uint8_t MFdate[8];
+#define CmdMotorOff 0x80  // Motor off command
+#define CmdMotorOn 0x88   // Motor on command
+#define CmdMotorStop 0x81 // Motor stop command
+#define CmdOpnLoop 0xA0   // Open loop control command
+#define CmdClsTrqu 0xA1   // Torque closed loop control command
+#define CmdReadEnc 0x90   // Read encoder command
+#define CmdReadStat1 0x9A // Read motor state 1 and error state command
+#define CmdClearErr 0x9B  // Clear motor error state
+#define CmdReadStat2 0x9C // Read motor state 2 command
 
-//--------------------------------------
-// for date[1] ~ date[7] = 0x00 
-void MF_Cmd00(uint8_t MF_Cmd){
-  MFcanMsg.can_id  = MFcanid;
-  MFcanMsg.can_dlc = MFcandlc;
-  MFcanMsg.data[0] = MF_Cmd;
-  MFcanMsg.data[1] = 0x00;  MFcanMsg.data[2] = 0x00;  MFcanMsg.data[3] = 0x00;  
-  MFcanMsg.data[4] = 0x00;  MFcanMsg.data[5] = 0x00;  MFcanMsg.data[6] = 0x00;  
-  MFcanMsg.data[7] = 0x00;
-  mcp2515_mf.sendMessage(&MFcanMsg);
+// ============================================================================
+// 内部ヘルパー関数
+// ============================================================================
 
-}
-//Motor off command
-void MF_MotorOff(){ 
-  MF_Cmd00(CmdMotorOff);
-}
-//Motor on command
-void MF_MotorOn(){
-  MF_Cmd00(CmdMotorOn);
-}
-//Motor stop command
-void MF_MotorStop(){
-  MF_Cmd00(CmdMotorStop);
-}
-//Read encoder command
-void MF_ReadEncode(){
-  MF_Cmd00(CmdReadEnc);
-}
-//Read motor state 1 and error state command
-void MF_ReadStat1(){
-  MF_Cmd00(CmdReadStat1);
-}
-//Read motor state 2 command
-void MF_ReadStat2(){
-  MF_Cmd00(CmdReadStat2);
-}
-//Clear motor error state
-void MF_ClearErr(){
-  MF_Cmd00(CmdClearErr);
-}
-//---------------------------------
-// Torque closed loop control command.
-// (the command can only be applied to MF,MH,MG series)
-// Host send commands to control the torque current output,
-// iqControl value is int16_t, range is -2048 ~ 2048, 
-// corresponding MF motor actual torque current range is -16.5A ~ 16.5A, 
-// corresponding MG motor actual torque current range is -33A ~ 33A. 
-// The bus current and the actual torque of the motor vary from motor to motor.
-//---------------------------------
-void MF_SetTorque(int16_t iTorquVal){
-  if(iTorquVal < -2048) iTorquVal = -2048;
-  else if (iTorquVal > 2048) iTorquVal = 2048;
-  uint8_t CurrentLowByte = (uint8_t)(iTorquVal & 0x00FF);
-  uint8_t CurrentHiByte  = (uint8_t)((iTorquVal >> 8)& 0x00FF) ;
-  MFcanMsg.can_id  = MFcanid;
-  MFcanMsg.can_dlc = MFcandlc;
-  MFcanMsg.data[0] = CmdClsTrqu;
-  MFcanMsg.data[1] = 0x00;
-  MFcanMsg.data[2] = 0x00;
-  MFcanMsg.data[3] = 0x00;
-  MFcanMsg.data[4] = CurrentLowByte;
-  MFcanMsg.data[5] = CurrentHiByte ;
-  MFcanMsg.data[6] = 0x00;
-  MFcanMsg.data[7] = 0x00;
-
-  mcp2515_mf.sendMessage(&MFcanMsg);
-
-}
-uint16_t EncValue;
-// for public access
-uint16_t getEncVal(){
-  return EncValue;
-}
-
-// get Encoder Value for return of "Read encoder command"".
-// call after a CAN Freame recieved.
-uint16_t getEncValue(struct can_frame MF_CAN_MSG){
-  uint8_t EncLow = MF_CAN_MSG.data[2];
-  uint8_t EncHi  = MF_CAN_MSG.data[3];
-  uint16_t retVal = EncHi * 256;
-  retVal = retVal +  EncLow;
-  return retVal;
-}
-
-// get Encoder Value for return of "Open loop control command(0xA0)" or 
-// "Torque control command(0xA1)"
-// call after a CAN Freame recieved.
-
-uint16_t getEncValPow(struct can_frame MF_CAN_MSG){
-  //--- reserve ---
-  //uint8_t Temperature = MF_CAN_MSG.data[1];
-  //uint8_t TorqCurrLow = MF_CAN_MSG.data[2];
-  //uint8_t TorqCurrHi  = MF_CAN_MSG.data[3];
-  //uint8_t MotorSpdLow = MF_CAN_MSG.data[4];
-  //uint8_t MotorSpdHi  = MF_CAN_MSG.data[5];
-  //--- reserve ---
-  uint8_t EncLow = MF_CAN_MSG.data[6];
-  uint8_t EncHi  = MF_CAN_MSG.data[7];
-  uint16_t retVal = EncHi * 256;
-  retVal = retVal +  EncLow;
-  return retVal;
-}
-
-bool chk_MF_rxBuffer(){
-  if (mcp2515_mf.readMessage(&MFcanMsg) == MCP2515::ERROR_OK) {
-    /*//-VVVVV------ for message test -----------
-    Serial.print(MFcanMsg.can_id, HEX); // print ID
-    Serial.print(" "); 
-    Serial.print(MFcanMsg.can_dlc, HEX); // print DLC
-    Serial.print(" ");
-    
-    for (int i = 0; i<MFcanMsg.can_dlc; i++)  {  // print the data
-      Serial.print(MFcanMsg.data[i],HEX);
-      Serial.print(" ");
-    }
-    *///-AAAAA------------- for message test -----------
-    if(MFcanMsg.data[0] == CmdReadEnc){
-      EncValue = getEncValue(MFcanMsg);
-    }
-    else if(MFcanMsg.data[0] == CmdOpnLoop || MFcanMsg.data[0] == CmdClsTrqu ){
-      EncValue = getEncValPow(MFcanMsg);
-    }
-    
-
-    //Serial.println();
-    return true;
+/**
+ * @brief データ[1]～[7]が0x00のコマンドを送信
+ *
+ * @param cmd コマンドバイト
+ */
+static void MF_Cmd00(uint8_t cmd) {
+  if (canBus == nullptr) {
+    return;
   }
-  else return false;
+
+  uint8_t data[8] = {cmd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  canBus->sendFrame(MF4015_CAN_ID, 8, data);
 }
 
+/**
+ * @brief 受信データからエンコーダ値を抽出（Read Encoder応答用）
+ *
+ * @param data 受信データ配列
+ * @return エンコーダ値
+ */
+static uint16_t getEncValue(const uint8_t *data) {
+  uint8_t EncLow = data[2];
+  uint8_t EncHi = data[3];
+  return (EncHi * 256) + EncLow;
+}
+
+/**
+ * @brief 受信データからエンコーダ値を抽出（Power Command応答用）
+ *
+ * @param data 受信データ配列
+ * @return エンコーダ値
+ */
+static uint16_t getEncValPow(const uint8_t *data) {
+  uint8_t EncLow = data[6];
+  uint8_t EncHi = data[7];
+  return (EncHi * 256) + EncLow;
+}
+
+// ============================================================================
+// 公開API
+// ============================================================================
+
+/**
+ * @brief モーターOFFコマンド
+ */
+void MF_MotorOff() { MF_Cmd00(CmdMotorOff); }
+
+/**
+ * @brief モーターONコマンド
+ */
+void MF_MotorOn() { MF_Cmd00(CmdMotorOn); }
+
+/**
+ * @brief モーター停止コマンド
+ */
+void MF_MotorStop() { MF_Cmd00(CmdMotorStop); }
+
+/**
+ * @brief エンコーダ読み取りコマンド
+ */
+void MF_ReadEncode() { MF_Cmd00(CmdReadEnc); }
+
+/**
+ * @brief モーター状態1読み取りコマンド
+ */
+void MF_ReadStat1() { MF_Cmd00(CmdReadStat1); }
+
+/**
+ * @brief モーター状態2読み取りコマンド
+ */
+void MF_ReadStat2() { MF_Cmd00(CmdReadStat2); }
+
+/**
+ * @brief モーターエラー状態クリアコマンド
+ */
+void MF_ClearErr() { MF_Cmd00(CmdClearErr); }
+
+/**
+ * @brief トルククローズドループ制御コマンド
+ *
+ * MF4015モーターのトルク電流出力を制御します。
+ * Force Feedback実装時に使用します。
+ *
+ * @param iTorquVal トルク電流指令値 (MF4015_TORQUE_MIN ～ MF4015_TORQUE_MAX)
+ *                  MF4015の場合: -2048 ～ 2048 → 実トルク電流 -16.5A ～ 16.5A
+ *
+ * @note MFシリーズとMGシリーズで実トルク電流範囲が異なります。
+ *       - MF: -16.5A ～ 16.5A
+ *       - MG: -33A ～ 33A
+ */
+void MF_SetTorque(int16_t iTorquVal) {
+  if (canBus == nullptr) {
+    return;
+  }
+
+  // トルク値の範囲制限
+  if (iTorquVal < MF4015_TORQUE_MIN)
+    iTorquVal = MF4015_TORQUE_MIN;
+  else if (iTorquVal > MF4015_TORQUE_MAX)
+    iTorquVal = MF4015_TORQUE_MAX;
+
+  // int16_tをバイト分割
+  uint8_t CurrentLowByte = (uint8_t)(iTorquVal & 0x00FF);
+  uint8_t CurrentHiByte = (uint8_t)((iTorquVal >> 8) & 0x00FF);
+
+  // CANフレーム構築
+  uint8_t data[8] = {CmdClsTrqu,     0x00,          0x00, 0x00,
+                     CurrentLowByte, CurrentHiByte, 0x00, 0x00};
+
+  canBus->sendFrame(MF4015_CAN_ID, 8, data);
+}
+
+/**
+ * @brief 最後に受信したエンコーダ値を取得
+ *
+ * @return エンコーダ値
+ */
+uint16_t getEncVal() { return EncValue; }
+
+/**
+ * @brief CAN受信バッファをチェックし、エンコーダ値を更新
+ *
+ * @return true: メッセージ受信成功, false: 受信データなし
+ */
+bool chk_MF_rxBuffer() {
+  if (canBus == nullptr) {
+    return false;
+  }
+
+  uint32_t id;
+  uint8_t len;
+  uint8_t data[8];
+
+  // CANフレームを受信
+  if (canBus->readFrame(id, len, data)) {
+    // MF4015からの応答かチェック
+    if (id == MF4015_CAN_ID && len == 8) {
+      // コマンドタイプに応じてエンコーダ値を抽出
+      if (data[0] == CmdReadEnc) {
+        EncValue = getEncValue(data);
+      } else if (data[0] == CmdOpnLoop || data[0] == CmdClsTrqu) {
+        EncValue = getEncValPow(data);
+      }
+      return true;
+    }
+  }
+
+  return false;
+}

@@ -1,72 +1,97 @@
-// filename: Ene1HandCont_IO.cpp
-// Ene1HandController IO
-//  6: S-Up Bottun   :DI Active Low
-//  7: S-Down Bottun :DI Active Low
-// A0: Break         :Analog PullUp Hi-R -> Lo-R
-// A1: Accel         :Analog 1-4V
-// fast mode(digitalPinFast + avdweb_AnalogReadFast)
-// 取込    65us/回
-// 平均化 160us/回
-// normal(Arduino Standard digitalRead + analogRead)
-// 取込   260us/回
-// digitalPinFast: https://github.com/TheFidax/digitalPinFast
-// avdweb_AnalogReadFast: https://github.com/avandalen/avdweb_AnalogReadFast
+/**
+ * @file Ene1HandCont_IO.cpp
+ * @brief Ene1ハンドルコントローラ 入出力処理
+ * @date 2026-01-23
+ *
+ * デジタル入力（シフトスイッチ）とアナログ入力（アクセル・ブレーキ）の
+ * 読み取り処理を提供します。
+ *
+ * ## 機能
+ * - シフトスイッチのチャタリング防止処理
+ * - アクセル・ブレーキの移動平均フィルタ処理
+ *
+ * ## パフォーマンス参考値
+ * - 標準モード(digitalRead + analogRead):
+ *   - 取込: 260us/回
+ * - 高速モード(digitalPinFast + avdweb_AnalogReadFast):
+ *   - 取込: 65us/回
+ *   - 平均化: 160us/回
+ *
+ * @see https://github.com/TheFidax/digitalPinFast
+ * @see https://github.com/avandalen/avdweb_AnalogReadFast
+ */
+
+#include "config.h"
 #include <Arduino.h>
 
-// ボタンのチャタリング防止処理変数
-const int ButtonTh = 4;
+// ============================================================================
+// ボタン入力処理用変数
+// ============================================================================
+
+// チャタリング防止用カウンタ
 int cntBuffUp, cntBuffDown;
+
+// 現在のボタン状態
 int CurBtnDownStatus, CurBtnUpStatus;
 
-#define pinShiftUp 6
-#define pinShiftDown 7
-// digitalPinFast pinShiftUp(6);
-// digitalPinFast pinShiftDown(7);
-#define pinBreakIn A0
-#define pinAccelIn A1
+// ============================================================================
+// アナログ入力処理用変数
+// ============================================================================
 
-// アナログ移動平均用
-#define NUMAVEBUFF 20
-#define NUMAVE 8
-int NumAdcSmp;            // ADC サンプリング数
-int AdcAcc[NUMAVEBUFF];   // 移動平均用バッファ 最新が0
-int AdcBreak[NUMAVEBUFF]; // 移動平均用バッファ 最新が0
-int AveAcc, AveBreak;     // 移動平均値
+// ADCサンプリング数カウンタ
+int NumAdcSmp;
 
+// 移動平均用バッファ（最新が[0]）
+int AdcAcc[ADC_BUFFER_SIZE];
+int AdcBreak[ADC_BUFFER_SIZE];
+
+// 移動平均値
+int AveAcc, AveBreak;
+
+/**
+ * @brief 入出力モジュールの初期化
+ *
+ * ピンモードの設定、チャタリング防止フィルタの初期化、
+ * 移動平均バッファの初期化を行います。
+ */
 void Setup_eHanConIO() {
-  // define pin mode
-  pinMode(pinShiftUp, INPUT_PULLUP);
-  pinMode(pinShiftDown, INPUT_PULLUP);
-  // pinShiftUp.pinModeFast(INPUT_PULLUP);
-  // pinShiftDown.pinModeFast(INPUT_PULLUP);
-  pinMode(pinBreakIn, INPUT);
-  pinMode(pinAccelIn, INPUT);
+  // ピンモード設定
+  pinMode(PIN_SHIFT_UP, INPUT_PULLUP);
+  pinMode(PIN_SHIFT_DOWN, INPUT_PULLUP);
+  pinMode(PIN_BRAKE, INPUT);
+  pinMode(PIN_ACCEL, INPUT);
 
-  // Digital-In Filter
-  cntBuffUp = ButtonTh;
-  cntBuffDown = ButtonTh;
+  // デジタル入力フィルタの初期化
+  cntBuffUp = BUTTON_DEBOUNCE_THRESHOLD;
+  cntBuffDown = BUTTON_DEBOUNCE_THRESHOLD;
   CurBtnDownStatus = HIGH;
   CurBtnUpStatus = HIGH;
 
-  // Adcの設定(バッファの初期化)
-  for (int i = 0; i < NUMAVE; i++) {
+  // ADCバッファの初期化
+  for (int i = 0; i < ADC_AVERAGE_COUNT; i++) {
     AdcAcc[i] = 0;
     AdcBreak[i] = 0;
   }
   NumAdcSmp = 0;
 }
-// UP ボタンの状態確認(デジタルフィルタ付)
+/**
+ * @brief シフトアップボタンの状態確認（デジタルフィルタ付）
+ *
+ * チャタリング防止のため、連続してBUTTON_DEBOUNCE_THRESHOLD回
+ * 同じ状態が続いた場合のみ状態を変更します。
+ *
+ * @return HIGH: ボタン非押下, LOW: ボタン押下
+ */
 int chkBtnUP() {
-  // int iBtn = pinShiftUp.digitalReadFast();
-  int iBtn = digitalRead(pinShiftUp);
+  int iBtn = digitalRead(PIN_SHIFT_UP);
 
-  if (iBtn > 0) { // HIGH
+  if (iBtn > 0) { // HIGH (ボタン非押下)
     cntBuffUp++;
-    if (cntBuffUp > ButtonTh) {
-      cntBuffUp = ButtonTh;
+    if (cntBuffUp > BUTTON_DEBOUNCE_THRESHOLD) {
+      cntBuffUp = BUTTON_DEBOUNCE_THRESHOLD;
       CurBtnUpStatus = HIGH;
     }
-  } else { // iBtn ==0;
+  } else { // LOW (ボタン押下)
     cntBuffUp--;
     if (cntBuffUp < 0) {
       cntBuffUp = 0;
@@ -76,17 +101,24 @@ int chkBtnUP() {
   return CurBtnUpStatus;
 }
 
-// DOWN ボタンの状態確認(デジタルフィルタ付)
+/**
+ * @brief シフトダウンボタンの状態確認（デジタルフィルタ付）
+ *
+ * チャタリング防止のため、連続してBUTTON_DEBOUNCE_THRESHOLD回
+ * 同じ状態が続いた場合のみ状態を変更します。
+ *
+ * @return HIGH: ボタン非押下, LOW: ボタン押下
+ */
 int chkBtnDown() {
-  // int iBtn = pinShiftDown.digitalReadFast();
-  int iBtn = digitalRead(pinShiftDown);
-  if (iBtn > 0) { // HIGH
+  int iBtn = digitalRead(PIN_SHIFT_DOWN);
+
+  if (iBtn > 0) { // HIGH (ボタン非押下)
     cntBuffDown++;
-    if (cntBuffDown > ButtonTh) {
-      cntBuffDown = ButtonTh;
+    if (cntBuffDown > BUTTON_DEBOUNCE_THRESHOLD) {
+      cntBuffDown = BUTTON_DEBOUNCE_THRESHOLD;
       CurBtnDownStatus = HIGH;
     }
-  } else { // iBtn ==0;
+  } else { // LOW (ボタン押下)
     cntBuffDown--;
     if (cntBuffDown < 0) {
       cntBuffDown = 0;
@@ -96,44 +128,68 @@ int chkBtnDown() {
   return CurBtnDownStatus;
 }
 
-// ADC計測(変換は無し)
+/**
+ * @brief ADC計測（アクセル・ブレーキ）
+ *
+ * アクセルとブレーキのADC値を読み取り、移動平均バッファに格納します。
+ * バッファは最新値が[0]になるようにシフトされます。
+ */
 void getADCAccBreak() {
-  // iにi-1を代入
-  for (int i = NUMAVE; i > 0; i--) {
+  // バッファをシフト（i に i-1 を代入）
+  for (int i = ADC_AVERAGE_COUNT; i > 0; i--) {
     AdcAcc[i] = AdcAcc[i - 1];
     AdcBreak[i] = AdcBreak[i - 1];
   }
-  // 0に変換値を入れる
-  // AdcAcc[0]   = analogReadFast(pinAccelIn);
-  // AdcBreak[0] = analogReadFast(pinBreakIn);
-  AdcAcc[0] = analogRead(pinAccelIn);
-  AdcBreak[0] = analogRead(pinBreakIn);
+
+  // 最新値を[0]に格納
+  AdcAcc[0] = analogRead(PIN_ACCEL);
+  AdcBreak[0] = analogRead(PIN_BRAKE);
   NumAdcSmp++;
 }
-// 平均化
+/**
+ * @brief ADC値の移動平均計算
+ *
+ * 移動平均バッファに格納されたADC値の平均を計算します。
+ * サンプル数が不足している場合は0を返します。
+ */
 void AveADCAccBreak() {
-  if (NumAdcSmp > NUMAVE - 1) {
-    NumAdcSmp = NUMAVE;
+  if (NumAdcSmp > ADC_AVERAGE_COUNT - 1) {
+    NumAdcSmp = ADC_AVERAGE_COUNT;
     int SumAdcAcc = 0;
-    int SumAdcBreak = 0; // int : signed 32bit
-    for (int i = 0; i < NUMAVE; i++) {
-      SumAdcAcc = AdcAcc[i] + SumAdcAcc;
-      SumAdcBreak = AdcBreak[i] + SumAdcBreak;
+    int SumAdcBreak = 0;
+
+    // 移動平均の計算
+    for (int i = 0; i < ADC_AVERAGE_COUNT; i++) {
+      SumAdcAcc += AdcAcc[i];
+      SumAdcBreak += AdcBreak[i];
     }
-    AveAcc = (int)((float)SumAdcAcc / (float)NUMAVE);
-    AveBreak = (int)((float)SumAdcBreak / (float)NUMAVE);
+
+    AveAcc = (int)((float)SumAdcAcc / (float)ADC_AVERAGE_COUNT);
+    AveBreak = (int)((float)SumAdcBreak / (float)ADC_AVERAGE_COUNT);
   } else {
+    // サンプル数不足の場合は0を返す
     AveAcc = 0;
     AveBreak = 0;
   }
+
   // サンプル取得数の上限処理
-  if (NumAdcSmp > NUMAVEBUFF) {
-    NumAdcSmp = NUMAVEBUFF;
+  if (NumAdcSmp > ADC_BUFFER_SIZE) {
+    NumAdcSmp = ADC_BUFFER_SIZE;
   }
 }
-//
+/**
+ * @brief アクセルペダルの平均値を取得
+ *
+ * @return アクセルペダルの移動平均値
+ */
 int getAccVal() { return AveAcc; }
-int getBreakVal() {
-  //  return AveBreak;
-  return 1024 - AveBreak;
-}
+
+/**
+ * @brief ブレーキペダルの平均値を取得
+ *
+ * ブレーキは踏み込むとADC値が下がる特性のため、
+ * 1024から減算して反転処理を行います。
+ *
+ * @return ブレーキペダルの移動平均値（反転処理済み）
+ */
+int getBreakVal() { return 1024 - AveBreak; }

@@ -1,26 +1,74 @@
-//file name:mf4015.h
-//usaeg: header file of Utilitys to USE MF4015 with CAN
+/**
+ * @file mf4015.h
+ * @brief LKTECH MF4015 ステアリングモーター制御ライブラリ ヘッダー
+ * @date 2026-01-23
+ *
+ * MF4015ステアリングモーターをCAN通信で制御するための関数を提供します。
+ */
 
-void SetupMCP2515_MF();
+#ifndef MF4015_H
+#define MF4015_H
 
-//comands with date[1] ~ date[7] = 0x00
-void MF_MotorOff();   //Motor off command
-void MF_MotorOn();    //Motor on command
-void MF_MotorStop();  //Motor stop command
-void MF_ReadEncode(); //Read encoder command
-void MF_ReadStat1();  //Read motor state 1 and error state command
-void MF_ReadStat2();  //Read motor state 2 command
-void MF_ClearErr();   //Clear motor error state
+#include <Arduino.h>
 
-// get Encoder Value for return of "Read encoder command"".
-//uint16_t getEncVal(struct can_frame MF_CAN_MSG);
+// ============================================================================
+// 公開API
+// ============================================================================
+
+/**
+ * @brief モーターOFFコマンド
+ */
+void MF_MotorOff();
+
+/**
+ * @brief モーターONコマンド
+ */
+void MF_MotorOn();
+
+/**
+ * @brief モーター停止コマンド
+ */
+void MF_MotorStop();
+
+/**
+ * @brief エンコーダ読み取りコマンド
+ */
+void MF_ReadEncode();
+
+/**
+ * @brief モーター状態1読み取りコマンド
+ */
+void MF_ReadStat1();
+
+/**
+ * @brief モーター状態2読み取りコマンド
+ */
+void MF_ReadStat2();
+
+/**
+ * @brief モーターエラー状態クリアコマンド
+ */
+void MF_ClearErr();
+
+/**
+ * @brief トルククローズドループ制御コマンド
+ *
+ * @param iTorquVal トルク電流指令値 (-2048 ～ 2048)
+ */
+void MF_SetTorque(int16_t iTorquVal);
+
+/**
+ * @brief 最後に受信したエンコーダ値を取得
+ *
+ * @return エンコーダ値
+ */
 uint16_t getEncVal();
 
-// Torque closed loop control command.
-void MF_SetTorque(int16_t iTorquVal);
-// get Encoder Value for return of "Open loop control command(0xA0)" or 
-//uint16_t getEncValPow(struct can_frame MF_CAN_MSG);
-
+/**
+ * @brief CAN受信バッファをチェックし、エンコーダ値を更新
+ *
+ * @return true: メッセージ受信成功, false: 受信データなし
+ */
 bool chk_MF_rxBuffer();
 
-
+#endif // MF4015_H

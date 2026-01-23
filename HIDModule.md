@@ -5,25 +5,28 @@ PCホストに対して、デバイスを標準的なゲームコントローラ
 
 ## 2. デバイス構成
 - **USBクラス**: HID (Human Interface Device)
-- **ライブラリ**: `mheironimus/Joystick`
+- **ライブラリ**: `Adafruit_TinyUSB`
 - **レポートID**: デフォルトを使用
+- **管理コア**: Core 0
 
 ## 3. レポート構造 (送信データ)
 以下のデータを20ms周期でホストに送信する。
 
 ### 3.1 軸入力 (Axes)
-| 軸名 | 役割 | 対応データレンジ | 備考 |
+| 軸名 | 役割 | レポート値 | 元データレンジ |
 | :--- | :--- | :--- | :--- |
-| Steering | ハンドル角度 | -5461 ～ 5461 | ±30度に相当 |
-| Accelerator | アクセル量 | 160 ～ 840 | スロットル電圧に対応 |
-| Brake | ブレーキ圧 | 100 ～ 820 | センサ分圧に対応（反転後） |
+| Steering | ハンドル角度 | -127 ～ 127 | -5461 ～ 5461 (±30度) |
+| Accelerator | アクセル量 | -127 ～ 127 | 0 ～ 65535 |
+| Brake | ブレーキ圧 | -127 ～ 127 | 0 ～ 65535 |
 
 ### 3.2 ボタン入力 (Buttons)
-| ボタン番号 | 役割 | 入力ソース |
-| :--- | :--- | :--- |
-| Button 0 (nBtnUP) | Shift Up | S-Up Button (D6) |
-| Button 1 (nBtnDOWN) | Shift Down | S-Down Button (D7) |
+| ボタン番号 | 役割 | ピン番号 | 備考 |
+| :--- | :--- | :--- | :--- |
+| Button 0 | Shift Up | GPIO 25 | Active Low, 内部プルアップ |
+| Button 1 | Shift Down | GPIO 24 | Active Low, 内部プルアップ |
 
-## 4. 特記事項
-- **FFB受信 (将来課題)**: 現在は送信専用だが、将来的にはホストからの `Set Feature` レポート等を通じてFFBパケットを受け取る機能を拡張予定である。
-- **デバッグ**: `Serial` 通信とUSB HID送信は独立して動作可能だが、パフォーマンス維持のため、本番動作時はシリアル出力を最小限に抑制する。
+## 4. 受信 (PC -> Controller)
+- **FFB目標トルク**: Core 0 にてパケット受信後、`sharedData.targetTorque` (-2048～2048) を更新する。
+
+## 5. 特記事項
+- **ライブラリ変更**: 当初検討していた `mheironimus/Joystick` から、デュアルコア環境との親和性が高い `Adafruit_TinyUSB` へ変更した。

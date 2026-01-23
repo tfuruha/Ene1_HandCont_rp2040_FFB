@@ -4,27 +4,119 @@
 #include <Arduino.h>
 
 /**
- * @brief Core 0 と Core 1 で共有するデータの構造体
- * 
- * Core 1 (制御コア) がデータを書き込み、Core 0 (通信コア) が読み取ってUSB経由で送信することを想定。
+ * @file shared_data.h
+ * @brief Core 0 と Core 1 で共有するデータ構造体の定義
+ * @date 2026-01-23
+ *
+ * RP2040のデュアルコア構成において、Core間でデータを安全に共有するための構造体です。
+ *
+ * ## データフロー
+ * - **Core 1 (制御コア)**: センサー入力を読み取り、このデータ構造体に書き込む
+ * - **Core 0 (通信コア)**: このデータ構造体を読み取り、USB
+ * HIDレポートとして送信する
+ *
+ * ## 注意事項
+ * - すべてのフィールドは volatile 修飾子を使用（コンパイラ最適化の抑制）
+ * -
+ * マルチコアアクセスの競合を避けるため、必要に応じてミューテックスを使用すること
+ */
+
+/**
+ * @struct SharedData
+ * @brief Core 0 と Core 1 で共有するデータ構造体
  */
 struct SharedData {
-    // 入力データ (Core 1 -> Core 0)
-    volatile int16_t steeringAngle;   // ステアリング角度 (-32768 to 32767)
-    volatile uint16_t accelerator;    // アクセル値
-    volatile uint16_t brake;          // ブレーキ値
-    volatile uint32_t buttons;        // ボタンビットマスク (bit0: Up, bit1: Down)
+  // ========================================================================
+  // 入力データ (Core 1 -> Core 0)
+  // ========================================================================
 
-    // FFBデータ (Core 0 -> Core 1) - 将来の拡張用
-    volatile int16_t targetTorque;    // ホストから受信した目標トルク
-    volatile uint8_t ffbEffectStatus; // FFBエフェクトの状態
-    
-    // システムステータス
-    volatile uint32_t core1LoopCount; // Core 1 のループカウンタ (動作確認用)
-    volatile uint32_t lastCore1Micros; // Core 1 の最終実行時刻 (us)
+  /**
+   * @brief ステアリング角度
+   *
+   * MF4015から取得したエンコーダ値を角度に変換した値。
+   * 範囲: -32768 ～ 32767 (int16_t)
+   * 有効範囲: ±5461 (±30度相当)
+   */
+  volatile int16_t steeringAngle;
+
+  /**
+   * @brief アクセルペダル値
+   *
+   * ADC1から取得したアクセルペダルの踏み込み量。
+   * 範囲: 0 ～ 65535 (uint16_t)
+   * ADC生値範囲: 160 ～ 840 (10bit基準)
+   */
+  volatile uint16_t accelerator;
+
+  /**
+   * @brief ブレーキペダル値
+   *
+   * ADC0から取得したブレーキペダルの踏み込み量。
+   * 範囲: 0 ～ 65535 (uint16_t)
+   * ADC生値範囲: 100 ～ 820 (10bit基準、反転処理済み)
+   */
+  volatile uint16_t brake;
+
+  /**
+   * @brief ボタン状態ビットマスク
+   *
+   * bit0: シフトアップボタン (1=押下, 0=非押下)
+   * bit1: シフトダウンボタン (1=押下, 0=非押下)
+   * bit2-31: 予約 (将来の拡張用)
+   */
+  volatile uint32_t buttons;
+
+  // ========================================================================
+  // FFBデータ (Core 0 -> Core 1) - 将来の拡張用
+  // ========================================================================
+
+  /**
+   * @brief 目標トルク値
+   *
+   * ホストPC (ゲーム) から受信したForce Feedbackの目標トルク。
+   * 範囲: -2048 ～ 2048 (MF4015のトルク電流指令値範囲)
+   *
+   * @note 現在は将来の拡張用として定義。実装時に使用。
+   */
+  volatile int16_t targetTorque;
+
+  /**
+   * @brief FFBエフェクト状態
+   *
+   * Force Feedbackエフェクトの有効/無効状態。
+   * 0: 無効, 1: 有効
+   *
+   * @note 現在は将来の拡張用として定義。実装時に使用。
+   */
+  volatile uint8_t ffbEffectStatus;
+
+  // ========================================================================
+  // システムステータス
+  // ========================================================================
+
+  /**
+   * @brief Core 1 のループカウンタ
+   *
+   * Core 1が正常に動作しているかを確認するためのカウンタ。
+   * 毎ループごとにインクリメントされる。
+   */
+  volatile uint32_t core1LoopCount;
+
+  /**
+   * @brief Core 1 の最終実行時刻 (マイクロ秒)
+   *
+   * Core 1が最後にデータを更新した時刻 (micros() の値)。
+   * Core 0側でタイムアウト検出に使用可能。
+   */
+  volatile uint32_t lastCore1Micros;
 };
 
-// グローバル共有インスタンスの extern 宣言
+/**
+ * @brief グローバル共有インスタンスの extern 宣言
+ *
+ * 実体は main.cpp で定義されます。
+ * 各モジュールはこのグローバルインスタンスを通じてデータを共有します。
+ */
 extern SharedData sharedData;
 
 #endif // SHARED_DATA_H
