@@ -8,6 +8,7 @@
 #include "config.h"
 #include "config_manager.h"
 #include "shared_data.h"
+#include "util.h"
 #include <Adafruit_TinyUSB.h>
 #include <Arduino.h>
 
@@ -30,7 +31,7 @@ MF4015_Driver mfMotor(&canWrapper, MF4015_CAN_ID);
 // mf4015.cpp (旧コードとの互換用) で使用する extern ポインタも一応紐付けておく
 extern CANInterface *canBus;
 
-// --- HIDレポート定義 ---
+// --- HIDレポート記述子定義 ---
 uint8_t const desc_hid_report[] = {
     TUD_HID_REPORT_DESC_GAMEPAD() // 最小構成。将来的にPID/FFB拡張が必要。
 };
@@ -38,6 +39,7 @@ uint8_t const desc_hid_report[] = {
 // ============================================================================
 // Core 0: USB 通信・アプリ管理・FFB受信
 // ============================================================================
+static uint32_t last_hid_report_ms; // HIDレポート送信 前回時刻
 
 void setup() {
   Serial.begin(SERIAL_BAUDRATE);
@@ -51,7 +53,7 @@ void setup() {
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
   usb_hid.begin();
-
+  last_hid_report_ms = 0; //
   Serial.println("Core 0: System Initialized (USB/Setup)");
 }
 
@@ -60,16 +62,13 @@ void setup() {
  *
  * USB HID通信の維持と、ホストからのFFBパケット解析を行う
  */
-void loop() {
-  // HIDレポート送信 (20ms周期)
-  static uint32_t last_report_ms = 0;
-  if (millis() - last_report_ms >= MAIN_INTERVAL_MS) {
-    last_report_ms = millis();
 
+void loop() {
+  // HIDレポート送信 (HIDREO_INTERVAL_MS ms周期)
+  if (checkInterval_m(last_hid_report_ms, HIDREPO_INTERVAL_MS)) {
     if (usb_hid.ready()) {
       hid_gamepad_report_t report = {0};
-
-      // Core 1が計算したステアリング・ペダル値をHIDパケットに載せる
+      // Core 1が計算したステアリング・ペダル値をHIDパケットに変換
       report.x =
           (int8_t)map(sharedData.steeringAngle, -32768, 32767, -127, 127);
       report.y = (int8_t)map(sharedData.accelerator, 0, 65535, -127, 127);
@@ -93,7 +92,7 @@ void loop() {
 // ============================================================================
 // Core 1: 1ms 周期制御・CAN通信
 // ============================================================================
-
+static uint32_t last_strcont_us; // ステアリング制御前回時刻
 void setup1() {
   // CANインターフェースのポインタをグローバルにも紐付け
   canBus = &canWrapper;
@@ -106,51 +105,47 @@ void setup1() {
   } else {
     Serial.println("Core 1: CAN Init FAILED!");
   }
-
+  last_strcont_us = micros(); // ステアリング制御前回時刻 初期化
   sharedData.lastCore1Micros = micros();
   Serial.println("Core 1: Control Loop Started");
 }
 
 /**
- * @brief Core 1 ループ (1ms周期)
+ * @brief Core 1 ループ (1000us周期)
  *
  * センサー値の読み取り、CANメッセージの受信解析、
- * および目標トルクに基づくモーター制御指令の送出を行う
+ * および目標トルクに基づくモーター制御指令の送出を行う。
+ * 非ブロッキングでCANバッファを監視しつつ、高精度な周期実行を行う。
  */
 void loop1() {
-  // 厳密な周期管理 (1000us)
-  static uint32_t next_us = micros();
-
-  // 次の実行時刻まで待機
-  while (micros() < next_us) {
-    // 受信バッファの常時監視
-    if (canWrapper.available()) {
-      uint32_t id;
-      uint8_t len;
-      uint8_t data[8];
-      if (canWrapper.readFrame(id, len, data)) {
-        // モータードライバにパケットを渡してステータス更新
-        mfMotor.parseFrame(id, len, data);
-      }
+  // 1. CAN受信バッファの常時監視 (周期に関わらず可能な限り頻繁に実行)
+  if (canWrapper.available()) {
+    uint32_t id;
+    uint8_t len;
+    uint8_t data[8];
+    if (canWrapper.readFrame(id, len, data)) {
+      // モータードライバにパケットを渡してステータス更新
+      mfMotor.parseFrame(id, len, data);
     }
   }
 
-  // 周期処理開始
-  uint32_t now = micros();
-  sharedData.lastCore1Micros = now;
-  sharedData.core1LoopCount++;
+  // 2. 厳密な 1ms 周期制御 (累積誤差の排除)
+  uint32_t now_us = micros();
+  if (checkInterval_u(last_strcont_us, STEAR_CONT_INTERVAL_US)) {
 
-  // 1. ドライバから読み取ったステータスを sharedData に反映
-  sharedData.steeringAngle = (int16_t)mfMotor.getEncoderValue();
+    // --- 周期処理開始 ---
+    sharedData.lastCore1Micros = now_us;
+    sharedData.core1LoopCount++;
 
-  // 2. 他のIO（ペダル等）の読み取りロジック呼び出し
-  // sharedData.accelerator = ...
-  // sharedData.brake = ...
+    // A. ドライバから読み取ったステータスを sharedData に反映
+    sharedData.steeringAngle = (int16_t)mfMotor.getEncoderValue();
 
-  // 3. Core 0 が更新した targetTorque を読み取ってCAN送信
-  int16_t torque = sharedData.targetTorque;
-  mfMotor.setTorque(torque);
+    // B. 他のIO（ペダル等）の読み取り（将来の実装用）
+    // sharedData.accelerator = ...
+    // sharedData.brake = ...
 
-  // 次の実行時刻を更新
-  next_us += 1000;
+    // C. Core 0 が更新した目標トルクをモーターに送信
+    int16_t torque = sharedData.targetTorque;
+    mfMotor.setTorque(torque);
+  }
 }

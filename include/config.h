@@ -58,7 +58,8 @@
 // ============================================================================
 
 #define SAMPLING_INTERVAL_MS 2 // ADC/DI サンプリング周期 (ms)
-#define MAIN_INTERVAL_MS 20    // HIDレポート送信周期 (ms)
+#define HIDREPO_INTERVAL_MS 20    // HIDレポート送信周期 (ms)
+#define STEAR_CONT_INTERVAL_US 1000 //(FFD含む)ステアリング制御インターバル(us)
 
 // ============================================================================
 // アナログ入力設定
