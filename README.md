@@ -1,9 +1,10 @@
 # ene1用ハンドルコントローラ (Ene1 Steering Controller)
 
+**Work In Progress**
 PC用レーシングシミュレーション（Assetto Corsa等）で使用することを目的とした、自作ハンドルコントローラの組込みコントローラプロジェクトです。
 
 ## 概要
-Arduino Pro Micro (ATmega32U4) をコアとし、CAN通信で制御するブラシレスモータ（MF4015）をステアリングセンサ兼アクチュエータとして使用します。標準的なUSB HID (Joystick) として認識されるため、多くのレーシングゲームでそのまま利用可能です。
+RP2040(RasberryPi Pico) をコアとし、CAN通信で制御するブラシレスモータ（MF4015）をステアリングセンサ兼アクチュエータとして使用します。標準的なUSB HID (Joystick) として認識されるため、多くのレーシングゲームでそのまま利用可能です。
 
 ## 主な機能
 - **ステアリング**: CAN通信を介した高精度な角度取得（LKTECH MF4015使用）
@@ -12,7 +13,7 @@ Arduino Pro Micro (ATmega32U4) をコアとし、CAN通信で制御するブラ�
 - **将来的な拡張性**: モータトルク制御コマンドを実装済みで、将来的なFFB（フォースフィードバック）への対応が可能
 
 ## ハードウェア構成
-- **マイコン**: Arduino Pro Micro (16MHz/5V)
+- **マイコン**: RP2040(RasberryPi Pico)
 - **CANコントローラ**: MCP2515 (SPI接続, Clock: 8MHz)
 - **ステアリングモータ**: [LKTECH MF4015](http://en.lkmotor.cn/ProDetail.aspx?ProId=256)
 - **アクセル**: 0.8V - 4.2V 電圧出力型スロットル
