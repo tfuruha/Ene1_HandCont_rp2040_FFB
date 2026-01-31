@@ -18,10 +18,11 @@
 // ============================================================================
 
 // --- SPI通信ピン (MCP2515 CAN Controller) ---
-#define PIN_CAN_CS 17  // MCP2515 Chip Select
-#define PIN_SPI_SCK 18 // SPI Clock
-#define PIN_SPI_TX 19  // SPI MOSI (TX)
-#define PIN_SPI_RX 16  // SPI MISO (RX)
+#define PIN_SPI_INT 1 // SPI INT*
+#define PIN_SPI_SCK 2 // SPI Clock
+#define PIN_SPI_TX 3  // SPI MOSI (TX)
+#define PIN_SPI_RX 4  // SPI MISO (RX)
+#define PIN_CAN_CS 5  // MCP2515 Chip Select
 
 // --- デジタル入力ピン (シフトスイッチ) ---
 #define PIN_SHIFT_UP 25   // シフトアップボタン (Active Low, 内部プルアップ)
@@ -38,7 +39,7 @@
 // --- MCP2515設定 ---
 // 注: CAN通信の設定値は mcp2515.h で定義されている enum 型を使用します
 // 実際の設定は mf4015.cpp の SetupMCP2515_MF() 関数内で行います
-// 参考値: CAN_500KBPS (500kbps), MCP_8MHZ (8MHz クロック)
+// 参考値: CAN_500KBPS (500kbps), MCP_8MHZ (16MHz クロック)
 
 // --- MF4015 ステアリングモーター設定 ---
 #define MF4015_CAN_ID 0x141 // MF4015のCAN ID (0x140 + ID1)

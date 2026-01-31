@@ -60,8 +60,8 @@ bool MCP2515_Wrapper::begin() {
   mcp2515->reset();
 
   // ボーレートとクロック周波数を設定
-  // CAN_500KBPS: 500kbps, MCP_8MHZ: 8MHz クロック
-  MCP2515::ERROR result = mcp2515->setBitrate(CAN_500KBPS, MCP_8MHZ);
+  // CAN_500KBPS: 500kbps, MCP_16MHZ: 16MHz クロック
+  MCP2515::ERROR result = mcp2515->setBitrate(CAN_500KBPS, MCP_16MHZ);
   if (result != MCP2515::ERROR_OK) {
     return false;
   }

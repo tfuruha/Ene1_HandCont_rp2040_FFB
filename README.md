@@ -14,7 +14,7 @@ RP2040(RasberryPi Pico) をコアとし、CAN通信で制御するブラシレ�
 
 ## ハードウェア構成
 - **マイコン**: RP2040(RasberryPi Pico)
-- **CANコントローラ**: MCP2515 (SPI接続, Clock: 8MHz)
+- **CANコントローラ**: MCP2515 (SPI接続, Clock: 16MHz)
 - **ステアリングモータ**: [LKTECH MF4015](http://en.lkmotor.cn/ProDetail.aspx?ProId=256)
 - **アクセル**: 0.8V - 4.2V 電圧出力型スロットル
 - **ブレーキ**: [薄膜圧力センサー](https://www.amazon.co.jp/dp/B07NKQWY3P)

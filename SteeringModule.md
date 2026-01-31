@@ -4,7 +4,7 @@
 LKTECH [MF4015 モータ](http://en.lkmotor.cn/ProDetail.aspx?ProId=256)を使用したステアリングの角度取得、および将来的なフォースフィードバック（FFB）実現のためのトルク制御仕様を規定する。
 
 ## 2. 通信仕様 (CAN Bus)
-- **コントローラ**: MCP2515 (Clock: 8MHz)
+- **コントローラ**: MCP2515 (Clock: 16MHz)
 - **ビットレート**: 500kbps
 - **ノードID**: 1 (MF4015)
 - **メッセージ形式**: 標準フレーム (Standard Frame), DLC 8bytes

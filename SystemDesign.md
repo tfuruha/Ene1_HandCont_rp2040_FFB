@@ -30,5 +30,3 @@
 | :--- | :--- |
 | `Joystick` | USB HID通信 (Gamepad/Joystick) |
 | `arduino-mcp2515` | MCP2515 CANコントローラ制御 |
-| `digitalPinFast` | 高速デジタルI/O処理 |
-| `avdweb_AnalogReadFast` | 高速ADC読取処理 |

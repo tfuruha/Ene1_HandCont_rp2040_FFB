@@ -23,7 +23,7 @@ PC用レーシングシミュレーション（Assetto Corsa等）と組み合�
 
 *   **マイコン:** AE-RP2040 (RP2040)
 *   **ハンドルセンサ・アクチュエータ:** LKTECH MF4015 (CAN接続)
-*   **CANコントローラ:** MCP2515 (SPI接続, CS: Pin 17, Clock: 8MHz)
+*   **CANコントローラ:** MCP2515 (SPI接続, CS: Pin 17, Clock: 16MHz)
 *   **アクセル:** EVスクータ用スロットル (電圧出力 0.5V - 2.8V)
 *   **ブレーキ:** 抵抗式面圧センサ (FSR, 引っ張ると抵抗が減少するプルアップ回路構成)
 *   **シフトスイッチ:** 有接点スイッチ (アップ/ダウン 各1個)
@@ -38,10 +38,11 @@ PC用レーシングシミュレーション（Assetto Corsa等）と組み合�
 | 24 | S-Down Button | デジタル入力 (DI) | Active Low, 内部プルアップ |
 | ADC0 (26) | Brake | アナログ入力 (AI) | 面圧センサ入力 (Hi-R -> Lo-R) |
 | ADC1 (27) | Accel | アナログ入力 (AI) | 電圧入力 (0.5V - 2.8V相当) |
-| 17 | CAN_CS | SPI CS | MCP2515 制御用 |
-| 18 | SPI_SCK | SPI Clock | |
-| 19 | SPI_TX | SPI MOSI (TX) | |
-| 16 | SPI_RX | SPI MISO (RX) | |
+| 5 | CAN_CS | SPI CS | MCP2515 制御用 |
+| 1 | SPI_INT | SPI INT | |
+| 2 | SPI_SCK | SPI Clock | |
+| 3 | SPI_TX | SPI MOSI (TX) | |
+| 4 | SPI_RX | SPI MISO (RX) | |
 
 ---
 
@@ -50,7 +51,7 @@ PC用レーシングシミュレーション（Assetto Corsa等）と組み合�
 ### 4.1 通信・周期
 *   **Sampling Interval:** 2ms (ADC, DIの取得周期)
 *   **Main Interval:** 20ms (ホストPCへのHIDレポート送信周期)
-*   **CAN通信:** 500kbps, 8MHz Clock
+*   **CAN通信:** 500kbps, 16MHz Clock
 
 ### 4.2 ステアリング (MF4015)
 *   **通信プロトコル:** CAN命令 (LKTECHプロトコル V2.35)

@@ -48,7 +48,7 @@ Core間で共有される `SharedData` 構造体（`include/shared_data.h`）を
 ## 4. 通信プロトコル仕様
 
 ### 4.1 CAN (Motor)
-*   **レート:** 500kbps / 8MHz Clock
+*   **レート:** 500kbps / 16MHz Clock
 *   **ID:** 0x141 (MF4015)
 *   **制御:** トルク制御 (0xA1コマンド) を主に使用
 

@@ -57,7 +57,7 @@ public:
    *
    * 設定値:
    * - ボーレート: CAN_500KBPS (500kbps)
-   * - クロック: MCP_8MHZ (8MHz)
+   * - クロック: MCP_16MHZ (16MHz)
    *
    * @return true: 初期化成功, false: 初期化失敗
    */
