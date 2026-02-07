@@ -3,6 +3,7 @@
  * @brief Ene1_HandCont_rp2040_FFB メインプログラム
  */
 
+#include "Ene1HandCont_IO.h"
 #include "MCP2515_Wrapper.h"
 #include "MF4015_Driver.h"
 #include "config.h"
@@ -93,9 +94,18 @@ void loop() {
 // Core 1: 1ms 周期制御・CAN通信
 // ============================================================================
 static IntervalTrigger_u stearContTrigger(STEAR_CONT_INTERVAL_US);
+static IntervalTrigger_m sampleTrigger(SAMPLING_INTERVAL_MS);
+
 void setup1() {
   // CANインターフェースのポインタをグローバルにも紐付け
   canBus = &canWrapper;
+
+  // IOの初期化
+  diKeyUp.Init();
+  diKeyDown.Init();
+  adAccel.Init();
+  adBrake.Init();
+  sampleTrigger.init();
 
   // CAN通信開始
   if (canWrapper.begin()) {
@@ -140,9 +150,28 @@ void loop1() {
     // A. ドライバから読み取ったステータスを sharedData に反映
     sharedData.steeringAngle = (int16_t)mfMotor.getEncoderValue();
 
-    // B. 他のIO（ペダル等）の読み取り（将来の実装用）
-    // sharedData.accelerator = ...
-    // sharedData.brake = ...
+    // B. 他のIO（ペダル等）の読み取り
+    if (sampleTrigger.hasExpired()) {
+      // ADCサンプリング
+      adAccel.getadc();
+      adBrake.getadc();
+
+      // ボタン状態更新
+      diKeyUp.update();
+      diKeyDown.update();
+
+      // 共有データへの反映
+      sharedData.accelerator = (uint16_t)adAccel.getvalue();
+      sharedData.brake = (uint16_t)adBrake.getvalue();
+
+      // ボタンビットマスク構築 (bit0: UP, bit1: DOWN)
+      uint32_t btnMask = 0;
+      if (diKeyUp.getState() == LOW)
+        btnMask |= (1 << 0);
+      if (diKeyDown.getState() == LOW)
+        btnMask |= (1 << 1);
+      sharedData.buttons = btnMask;
+    }
 
     // C. Core 0 が更新した目標トルクをモーターに送信
     int16_t torque = sharedData.targetTorque;

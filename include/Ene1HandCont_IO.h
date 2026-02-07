@@ -1,15 +1,18 @@
-//file name: Ene1HandCont_IO.h
-//Ene1HandController IO Header
+#ifndef ENE1_HANDCONT_IO_H
+#define ENE1_HANDCONT_IO_H
 
-//Setup Ene1HandController IO
-void Setup_eHanConIO();
+#include "ADInput.h"
+#include "DigitalInput.h"
 
-//Button IO Check
-int chkBtnUP();
-int chkBtnDown();
+/**
+ * @file Ene1HandCont_IO.h
+ * @brief IOインスタンスの外部参照用定義
+ */
 
-//Accel & Break 
-void getADCAccBreak();
-void AveADCAccBreak();
-int getAccVal();
-int getBreakVal();
+// グローバルIOインスタンス
+extern ADInputChannel adAccel;
+extern ADInputChannel adBrake;
+extern DigitalInputChannel diKeyUp;
+extern DigitalInputChannel diKeyDown;
+
+#endif // ENE1_HANDCONT_IO_H
