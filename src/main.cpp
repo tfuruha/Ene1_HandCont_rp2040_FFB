@@ -39,7 +39,7 @@ uint8_t const desc_hid_report[] = {
 // ============================================================================
 // Core 0: USB 通信・アプリ管理・FFB受信
 // ============================================================================
-static uint32_t last_hid_report_ms; // HIDレポート送信 前回時刻
+static IntervalTrigger_m hidReportTrigger(HIDREPO_INTERVAL_MS);
 
 void setup() {
   Serial.begin(SERIAL_BAUDRATE);
@@ -53,7 +53,7 @@ void setup() {
   usb_hid.setPollInterval(2);
   usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
   usb_hid.begin();
-  last_hid_report_ms = 0; //
+  hidReportTrigger.init();
   Serial.println("Core 0: System Initialized (USB/Setup)");
 }
 
@@ -65,7 +65,7 @@ void setup() {
 
 void loop() {
   // HIDレポート送信 (HIDREO_INTERVAL_MS ms周期)
-  if (checkInterval_m(last_hid_report_ms, HIDREPO_INTERVAL_MS)) {
+  if (hidReportTrigger.hasExpired()) {
     if (usb_hid.ready()) {
       hid_gamepad_report_t report = {0};
       // Core 1が計算したステアリング・ペダル値をHIDパケットに変換
@@ -92,7 +92,7 @@ void loop() {
 // ============================================================================
 // Core 1: 1ms 周期制御・CAN通信
 // ============================================================================
-static uint32_t last_strcont_us; // ステアリング制御前回時刻
+static IntervalTrigger_u stearContTrigger(STEAR_CONT_INTERVAL_US);
 void setup1() {
   // CANインターフェースのポインタをグローバルにも紐付け
   canBus = &canWrapper;
@@ -105,7 +105,7 @@ void setup1() {
   } else {
     Serial.println("Core 1: CAN Init FAILED!");
   }
-  last_strcont_us = micros(); // ステアリング制御前回時刻 初期化
+  stearContTrigger.init();
   sharedData.lastCore1Micros = micros();
   Serial.println("Core 1: Control Loop Started");
 }
@@ -131,7 +131,7 @@ void loop1() {
 
   // 2. 厳密な 1ms 周期制御 (累積誤差の排除)
   uint32_t now_us = micros();
-  if (checkInterval_u(last_strcont_us, STEAR_CONT_INTERVAL_US)) {
+  if (stearContTrigger.hasExpired()) {
 
     // --- 周期処理開始 ---
     sharedData.lastCore1Micros = now_us;

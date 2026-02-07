@@ -22,15 +22,15 @@
 #define PIN_SPI_SCK 2 // SPI Clock
 #define PIN_SPI_TX 3  // SPI MOSI (TX)
 #define PIN_SPI_RX 4  // SPI MISO (RX)
-#define PIN_CAN_CS 5  // MCP2515 Chip Select
+#define PIN_CAN_CS 10 // MCP2515 Chip Select
 
 // --- デジタル入力ピン (シフトスイッチ) ---
-#define PIN_SHIFT_UP 25   // シフトアップボタン (Active Low, 内部プルアップ)
-#define PIN_SHIFT_DOWN 24 // シフトダウンボタン (Active Low, 内部プルアップ)
+#define PIN_SHIFT_UP 6   // シフトアップボタン (D6, Active Low)
+#define PIN_SHIFT_DOWN 7 // シフトダウンボタン (D7, Active Low)
 
 // --- アナログ入力ピン (ペダル) ---
-#define PIN_BRAKE 26 // ADC0 - ブレーキペダル (面圧センサ)
-#define PIN_ACCEL 27 // ADC1 - アクセルペダル (電圧出力)
+#define PIN_BRAKE 26 // ADC0 (A0) - ブレーキペダル
+#define PIN_ACCEL 27 // ADC1 (A1) - アクセルペダル
 
 // ============================================================================
 // CAN通信設定
@@ -58,8 +58,8 @@
 // タイミング設定
 // ============================================================================
 
-#define SAMPLING_INTERVAL_MS 2 // ADC/DI サンプリング周期 (ms)
-#define HIDREPO_INTERVAL_MS 20    // HIDレポート送信周期 (ms)
+#define SAMPLING_INTERVAL_MS 2      // ADC/DI サンプリング周期 (ms)
+#define HIDREPO_INTERVAL_MS 20      // HIDレポート送信周期 (ms)
 #define STEAR_CONT_INTERVAL_US 1000 //(FFD含む)ステアリング制御インターバル(us)
 
 // ============================================================================
