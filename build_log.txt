@@ -1,0 +1,67 @@
+Processing pico (platform: https://github.com/maxgerhardt/platform-raspberrypi.git; board: pico; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/raspberrypi/pico.html
+PLATFORM: Raspberry Pi RP2040 (1.18.0+sha.cc24cfe) > Raspberry Pi Pico
+HARDWARE: RP2040 133MHz, 256KB RAM, 2MB Flash
+DEBUG: Current (blackmagic) External (blackmagic, cmsis-dap, jlink, pico-debug, picoprobe, raspberrypi-swd)
+PACKAGES: 
+ - framework-arduinopico @ 1.50403.0+sha.30aead9 
+ - tool-picotool-rp2040-earlephilhower @ 5.140200.250530 (14.2.0) 
+ - tool-pioasm-rp2040-earlephilhower @ 5.140200.250530 (14.2.0) 
+ - toolchain-rp2040-earlephilhower @ 5.140200.250530 (14.2.0)
+Flash size: 2.00MB
+Sketch size: 1.50MB
+Filesystem size: 0.50MB
+PSRAM size: 0.00MB
+Maximium Sketch size: 1568768 EEPROM start: 0x101ff000 Filesystem start: 0x1017f000 Filesystem end: 0x101ff000
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 79 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Adafruit TinyUSB Library @ 3.7.3
+|-- autowp-mcp2515 @ 1.3.1+sha.86fd56e
+|-- CAN_Bus
+|-- MF4015
+|-- LittleFS @ 0.1.0
+Building in release mode
+Compiling .pio\build\pico\src\main.cpp.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\api\tcpip.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\altcp_tls\altcp_tls_mbedtls.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\altcp_tls\altcp_tls_mbedtls_mem.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\lwiperf\lwiperf.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\mdns\mdns.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\mdns\mdns_domain.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\mdns\mdns_out.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\mqtt\mqtt.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\netbiosns\netbiosns.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\smtp\smtp.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\snmp\snmp_asn1.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\snmp\snmp_core.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\snmp\snmp_mib2.c.o
+src\main.cpp:35:8: error: 'DigitalInput' does not name a type
+   35 | extern DigitalInput diKeyUp;
+      |        ^~~~~~~~~~~~
+src\main.cpp:36:8: error: 'DigitalInput' does not name a type
+   36 | extern DigitalInput diKeyDown;
+      |        ^~~~~~~~~~~~
+src\main.cpp:97:26: error: redefinition of 'IntervalTrigger_u stearContTrigger'
+   97 | static IntervalTrigger_u stearContTrigger(STEAR_CONT_INTERVAL_US);
+      |                          ^~~~~~~~~~~~~~~~
+src\main.cpp:42:26: note: 'IntervalTrigger_u stearContTrigger' previously declared here
+   42 | static IntervalTrigger_u stearContTrigger(STEAR_CONT_INTERVAL_US);
+      |                          ^~~~~~~~~~~~~~~~
+src\main.cpp:98:26: error: redefinition of 'IntervalTrigger_m sampleTrigger'
+   98 | static IntervalTrigger_m sampleTrigger(SAMPLING_INTERVAL_MS);
+      |                          ^~~~~~~~~~~~~
+src\main.cpp:43:26: note: 'IntervalTrigger_m sampleTrigger' previously declared here
+   43 | static IntervalTrigger_m sampleTrigger(SAMPLING_INTERVAL_MS);
+      |                          ^~~~~~~~~~~~~
+src\main.cpp: In function 'void loop1()':
+src\main.cpp:171:26: error: 'struct custom_gamepad_report_t' has no member named 'accelerator'
+  171 |       core1_input_report.accelerator = (int16_t)adAccel.getvalue();
+      |                          ^~~~~~~~~~~
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\snmp\snmp_mib2_icmp.c.o
+*** [.pio\build\pico\src\main.cpp.o] Error 1
+========================== [FAILED] Took 8.77 seconds ==========================

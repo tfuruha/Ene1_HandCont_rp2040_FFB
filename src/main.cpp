@@ -3,6 +3,8 @@
  * @brief Ene1_HandCont_rp2040_FFB メインプログラム
  */
 
+#include "ADInput.h"
+#include "DigitalInput.h"
 #include "Ene1HandCont_IO.h"
 #include "MCP2515_Wrapper.h"
 #include "MF4015_Driver.h"
@@ -20,9 +22,6 @@
 // 共有データの実体
 SharedData sharedData = {0};
 
-// USB HID インスタンス
-Adafruit_USBD_HID usb_hid;
-
 // CANバスラッパー (MCP2515固有の実装を内包)
 MCP2515_Wrapper canWrapper(PIN_CAN_CS);
 
@@ -32,15 +31,15 @@ MF4015_Driver mfMotor(&canWrapper, MF4015_CAN_ID);
 // mf4015.cpp (旧コードとの互換用) で使用する extern ポインタも一応紐付けておく
 extern CANInterface *canBus;
 
-// --- HIDレポート記述子定義 ---
-uint8_t const desc_hid_report[] = {
-    TUD_HID_REPORT_DESC_GAMEPAD() // 最小構成。将来的にPID/FFB拡張が必要。
-};
-
-// ============================================================================
-// Core 0: USB 通信・アプリ管理・FFB受信
-// ============================================================================
+// --- 周期管理 ---
 static IntervalTrigger_m hidReportTrigger(HIDREPO_INTERVAL_MS);
+static IntervalTrigger_u stearContTrigger(STEAR_CONT_INTERVAL_US);
+static IntervalTrigger_m sampleTrigger(SAMPLING_INTERVAL_MS);
+
+// --- Core間通信用 (hidwffb.h に実体があるが main.cpp でも管理が必要なフラグ等)
+// ---
+static custom_gamepad_report_t core1_input_report = {0};
+static FFB_Shared_State_t core1_effects[MAX_EFFECTS];
 
 void setup() {
   Serial.begin(SERIAL_BAUDRATE);
@@ -50,10 +49,12 @@ void setup() {
     ConfigManager::loadConfig();
   }
 
-  // TinyUSB の初期化
-  usb_hid.setPollInterval(2);
-  usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
-  usb_hid.begin();
+  // HIDモジュールの初期化 (1msポーリング)
+  hidwffb_begin(1);
+
+  // 共有メモリ・ミューテックスの初期化
+  ffb_shared_memory_init();
+
   hidReportTrigger.init();
   Serial.println("Core 0: System Initialized (USB/Setup)");
 }
@@ -65,36 +66,28 @@ void setup() {
  */
 
 void loop() {
-  // HIDレポート送信 (HIDREO_INTERVAL_MS ms周期)
+  // 1. HIDレポート送信 (HIDREPO_INTERVAL_MS ms周期)
   if (hidReportTrigger.hasExpired()) {
-    if (usb_hid.ready()) {
-      hid_gamepad_report_t report = {0};
-      // Core 1が計算したステアリング・ペダル値をHIDパケットに変換
-      report.x =
-          (int8_t)map(sharedData.steeringAngle, -32768, 32767, -127, 127);
-      report.y = (int8_t)map(sharedData.accelerator, 0, 65535, -127, 127);
-      report.z = (int8_t)map(sharedData.brake, 0, 65535, -127, 127);
-      report.buttons = sharedData.buttons;
-
-      usb_hid.sendReport(0, &report, sizeof(report));
+    if (hidwffb_ready()) {
+      custom_gamepad_report_t report = {0};
+      // 共有メモリから入力を取得
+      ffb_core0_get_input_report(&report);
+      // HID送信
+      hidwffb_send_report(&report);
     }
   }
 
-  // --- FFB 受信スケルトン ---
-  // PCからのFFB Outパケット（Output Report）をチェックするロジック
-  //
-  // note: adafruit_hid には getOutputReport() 等のコールバックがある
-  // if (usb_hid.available()) {
-  //     // 受信したPIDパケットから targetTorque を抽出し sharedData に書き込む
-  //     // sharedData.targetTorque = parse_ffb_packet(...);
-  // }
+  // 2. PID 解析結果の共有 (FFB受信時)
+  pid_debug_info_t pid_info;
+  if (hidwffb_get_pid_debug_info(&pid_info)) {
+    // 解析結果（Gain, Magnitude等）を共有メモリへ
+    ffb_core0_update_shared(&pid_info);
+  }
 }
 
 // ============================================================================
 // Core 1: 1ms 周期制御・CAN通信
 // ============================================================================
-static IntervalTrigger_u stearContTrigger(STEAR_CONT_INTERVAL_US);
-static IntervalTrigger_m sampleTrigger(SAMPLING_INTERVAL_MS);
 
 void setup1() {
   // CANインターフェースのポインタをグローバルにも紐付け
@@ -147,34 +140,65 @@ void loop1() {
     sharedData.lastCore1Micros = now_us;
     sharedData.core1LoopCount++;
 
-    // A. ドライバから読み取ったステータスを sharedData に反映
-    sharedData.steeringAngle = (int16_t)mfMotor.getEncoderValue();
+    // 1. 共有メモリから FFB 命令を取得 (ID: 0x01/0x05/0x0A/0x0D 等のパース後)
+    // 今回は単純な 1ms サイクル管理のため、物理入力送信と一括して行う
+    // (詳細な FFB 命令が必要な場合は core1_effects を参照)
+    ffb_core1_update_shared(&core1_input_report, core1_effects);
+
+    // A. ドライバから読み取ったステータスを格納
+    // ステアリング角度を -32767..32767 の範囲にスケーリング
+    core1_input_report.steer = (int16_t)mfMotor.getEncoderValue();
 
     // B. 他のIO（ペダル等）の読み取り
     if (sampleTrigger.hasExpired()) {
       // ADCサンプリング
-      adAccel.getadc();
       adBrake.getadc();
+      adAccel.getadc();
 
       // ボタン状態更新
       diKeyUp.update();
       diKeyDown.update();
 
-      // 共有データへの反映
-      sharedData.accelerator = (uint16_t)adAccel.getvalue();
-      sharedData.brake = (uint16_t)adBrake.getvalue();
+      // 物理入力の更新
+      core1_input_report.accel = (int16_t)adAccel.getvalue();
+      core1_input_report.brake = (int16_t)adBrake.getvalue();
 
-      // ボタンビットマスク構築 (bit0: UP, bit1: DOWN)
-      uint32_t btnMask = 0;
+      // ボタンビットマスク構築
+      uint16_t btnMask = 0;
       if (diKeyUp.getState() == LOW)
         btnMask |= (1 << 0);
       if (diKeyDown.getState() == LOW)
         btnMask |= (1 << 1);
-      sharedData.buttons = btnMask;
+      core1_input_report.buttons = btnMask;
     }
 
-    // C. Core 0 が更新した目標トルクをモーターに送信
-    int16_t torque = sharedData.targetTorque;
+    // C. FFB 情報を元にモーターに送信
+    // 簡易的に Constant Force だけ反映
+    int16_t torque = core1_effects[0].magnitude;
+    // ※実際には sharedData.targetTorque や gain を加味した演算が必要だが
+    // ここでは移植ロジックの統合に集中するため直結する
+    sharedData.targetTorque = torque;
     mfMotor.setTorque(torque);
+
+    // 2. 更新した物理入力を共有メモリへ戻す
+    // (ffb_core1_update_shared は dual-way 同期なので、次のサイクルの
+    // hasExpired 内で実行)
+
+#ifdef PHYSICAL_INPUT_DEBUG_ENABLE
+    // 3. デバッグ出力 (1秒周期)
+    static IntervalTrigger_m debugTrigger(1000);
+    static bool debugInit = false;
+    if (!debugInit) {
+      debugTrigger.init();
+      debugInit = true;
+    }
+
+    if (debugTrigger.hasExpired()) {
+      Serial.printf(
+          "[PHYS_INPUT] Steer:%d, Accel:%d, Brake:%d, Buttons:0x%04X\n",
+          core1_input_report.steer, core1_input_report.accel,
+          core1_input_report.brake, core1_input_report.buttons);
+    }
+#endif
   }
 }

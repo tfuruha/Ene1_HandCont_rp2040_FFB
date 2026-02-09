@@ -22,11 +22,15 @@ RP2040(RasberryPi Pico) をコアとし、CAN通信で制御するブラシレ�
 ### ピンアサイン
 | ピン番号 | 信号名 | 機能 |
 | :--- | :--- | :--- |
-| D6 | S-Up Button | デジタル入力 (Active Low) |
-| D7 | S-Down Button | デジタル入力 (Active Low) |
-| A0 | Brake | アナログ入力 (面圧センサ) |
-| A1 | Accel | アナログ入力 (電圧入力) |
-| D10 | CAN_CS | MCP2515 CS信号 |
+| GP1 | SPI_INT | MCP2515 INT信号 |
+| GP2 | SPI_SCK | MCP2515 SCK信号 |
+| GP3 | SPI_TX | MCP2515 MOSI信号 |
+| GP4 | SPI_RX | MCP2515 MISO信号 |
+| GP5 | CAN_CS | MCP2515 CS信号 |
+| GP14 | S-Up Button | デジタル入力 (Active Low) |
+| GP15 | S-Down Button | デジタル入力 (Active Low) |
+| GP26 | Accel | アナログ入力 (電圧入力) |
+| GP28 | Brake | アナログ入力 (面圧センサ) |
 
 ## 開発環境
 - **PlatformIO**: Core `6.1.13` 以前/以降

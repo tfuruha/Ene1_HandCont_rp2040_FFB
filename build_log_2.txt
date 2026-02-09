@@ -1,0 +1,57 @@
+Processing pico (platform: https://github.com/maxgerhardt/platform-raspberrypi.git; board: pico; framework: arduino)
+--------------------------------------------------------------------------------
+Verbose mode can be enabled via `-v, --verbose` option
+CONFIGURATION: https://docs.platformio.org/page/boards/raspberrypi/pico.html
+PLATFORM: Raspberry Pi RP2040 (1.18.0+sha.cc24cfe) > Raspberry Pi Pico
+HARDWARE: RP2040 133MHz, 256KB RAM, 2MB Flash
+DEBUG: Current (blackmagic) External (blackmagic, cmsis-dap, jlink, pico-debug, picoprobe, raspberrypi-swd)
+PACKAGES: 
+ - framework-arduinopico @ 1.50403.0+sha.30aead9 
+ - tool-picotool-rp2040-earlephilhower @ 5.140200.250530 (14.2.0) 
+ - tool-pioasm-rp2040-earlephilhower @ 5.140200.250530 (14.2.0) 
+ - toolchain-rp2040-earlephilhower @ 5.140200.250530 (14.2.0)
+Flash size: 2.00MB
+Sketch size: 1.50MB
+Filesystem size: 0.50MB
+PSRAM size: 0.00MB
+Maximium Sketch size: 1568768 EEPROM start: 0x101ff000 Filesystem start: 0x1017f000 Filesystem end: 0x101ff000
+LDF: Library Dependency Finder -> https://bit.ly/configure-pio-ldf
+LDF Modes: Finder ~ chain, Compatibility ~ soft
+Found 79 compatible libraries
+Scanning dependencies...
+Dependency Graph
+|-- Adafruit TinyUSB Library @ 3.7.3
+|-- autowp-mcp2515 @ 1.3.1+sha.86fd56e
+|-- CAN_Bus
+|-- MF4015
+|-- LittleFS @ 0.1.0
+Building in release mode
+Compiling .pio\build\pico\src\main.cpp.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\snmp\snmpv3.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\snmp\snmpv3_mbedtls.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\sntp\sntp.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\apps\tftp\tftp.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\core\altcp.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\core\altcp_alloc.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\core\altcp_tcp.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\core\def.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\core\dns.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\core\inet_chksum.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\core\init.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\core\ip.c.o
+src\main.cpp:101:26: error: redefinition of 'IntervalTrigger_u stearContTrigger'
+  101 | static IntervalTrigger_u stearContTrigger(STEAR_CONT_INTERVAL_US);
+      |                          ^~~~~~~~~~~~~~~~
+src\main.cpp:46:26: note: 'IntervalTrigger_u stearContTrigger' previously declared here
+   46 | static IntervalTrigger_u stearContTrigger(STEAR_CONT_INTERVAL_US);
+      |                          ^~~~~~~~~~~~~~~~
+src\main.cpp:102:26: error: redefinition of 'IntervalTrigger_m sampleTrigger'
+  102 | static IntervalTrigger_m sampleTrigger(SAMPLING_INTERVAL_MS);
+      |                          ^~~~~~~~~~~~~
+src\main.cpp:47:26: note: 'IntervalTrigger_m sampleTrigger' previously declared here
+   47 | static IntervalTrigger_m sampleTrigger(SAMPLING_INTERVAL_MS);
+      |                          ^~~~~~~~~~~~~
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\core\ipv4\acd.c.o
+Compiling .pio\build\pico\FrameworkArduino\lwip\src\core\ipv4\autoip.c.o
+*** [.pio\build\pico\src\main.cpp.o] Error 1
+========================== [FAILED] Took 8.70 seconds ==========================

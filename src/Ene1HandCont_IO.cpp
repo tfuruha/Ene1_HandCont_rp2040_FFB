@@ -25,17 +25,19 @@ DigitalInputChannel diKeyDown(PIN_SHIFT_DOWN, BUTTON_DEBOUNCE_THRESHOLD);
 
 // 変換関数：ブレーキ用（範囲変換と反転処理）
 int transformBrake(int val) {
-  // config.h の BRAKE_ADC_MIN/MAX 範囲を 0-65535 に変換
+  // config.h の BRAKE_ADC_MIN/MAX 範囲を -32767..32767 に変換
   // BRAKE_INVERT が true の場合は反転（踏み込みで値が増えるように）
-  int mapped = map(val, BRAKE_ADC_MIN, BRAKE_ADC_MAX, 0, 65535);
-  return constrain(mapped, 0, 65535);
+  // return val; // for debug
+  int mapped = map(val, BRAKE_ADC_MIN, BRAKE_ADC_MAX, 32767, -32767);
+  return constrain(mapped, -32767, 32767);
 }
 
 // 変換関数：アクセル用（範囲変換）
 int transformAccel(int val) {
-  // config.h の ACCEL_ADC_MIN/MAX 範囲を 0-65535 に変換
-  int mapped = map(val, ACCEL_ADC_MIN, ACCEL_ADC_MAX, 0, 65535);
-  return constrain(mapped, 0, 65535);
+  // config.h の ACCEL_ADC_MIN/MAX 範囲を -32767..32767 に変換
+  // return val; // for debug
+  int mapped = map(val, ACCEL_ADC_MIN, ACCEL_ADC_MAX, -32767, 32767);
+  return constrain(mapped, -32767, 32767);
 }
 
 // AD入力チャンネルインスタンス

@@ -22,15 +22,15 @@
 #define PIN_SPI_SCK 2 // SPI Clock
 #define PIN_SPI_TX 3  // SPI MOSI (TX)
 #define PIN_SPI_RX 4  // SPI MISO (RX)
-#define PIN_CAN_CS 10 // MCP2515 Chip Select
+#define PIN_CAN_CS 5  // MCP2515 Chip Select
 
 // --- デジタル入力ピン (シフトスイッチ) ---
-#define PIN_SHIFT_UP 6   // シフトアップボタン (D6, Active Low)
-#define PIN_SHIFT_DOWN 7 // シフトダウンボタン (D7, Active Low)
+#define PIN_SHIFT_UP 14   // シフトアップボタン (D6, Active Low)
+#define PIN_SHIFT_DOWN 15 // シフトダウンボタン (D7, Active Low)
 
 // --- アナログ入力ピン (ペダル) ---
-#define PIN_BRAKE 26 // ADC0 (A0) - ブレーキペダル
-#define PIN_ACCEL 27 // ADC1 (A1) - アクセルペダル
+#define PIN_ACCEL 26 // ADC0 (A0) - アクセルペダル
+#define PIN_BRAKE 28 // ADC2 (A2) - ブレーキペダル
 
 // ============================================================================
 // CAN通信設定
@@ -67,8 +67,8 @@
 // ============================================================================
 
 // --- アクセルペダル (電圧入力 0.5V - 2.8V) ---
-#define ACCEL_ADC_MIN 160 // ADC最小値 (10bit基準)
-#define ACCEL_ADC_MAX 840 // ADC最大値 (10bit基準)
+#define ACCEL_ADC_MIN 180 // ADC最小値 (10bit基準)
+#define ACCEL_ADC_MAX 890 // ADC最大値 (10bit基準)
 
 // --- ブレーキペダル (プルアップ抵抗式面圧センサ) ---
 #define BRAKE_ADC_MIN 100 // ADC最小値 (10bit基準)
@@ -99,4 +99,5 @@
 
 #define SERIAL_BAUDRATE 115200 // シリアル通信ボーレート (デバッグ用)
 
-#endif // CONFIG_H
+#define PHYSICAL_INPUT_DEBUG_ENABLE // 物理入力のデバッグ出力を有効にする
+#endif                              // CONFIG_H
