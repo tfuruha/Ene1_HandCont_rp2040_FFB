@@ -46,9 +46,9 @@
 #define MF4015_DEVICE_ID 1  // MF4015デバイスID (1-32)
 
 // --- MF4015 角度範囲 ---
-#define MF4015_ANGLE_MIN -5461 // 有効角度範囲 最小値 (-30度相当)
-#define MF4015_ANGLE_MAX 5461  // 有効角度範囲 最大値 (+30度相当)
-#define MF4015_ANGLE_CENTER 0  // センター位置
+#define MF4015_ANGLE_MIN -5461     // 有効角度範囲 最小値 (-30度相当)
+#define MF4015_ANGLE_MAX 5461      // 有効角度範囲 最大値 (+30度相当)
+#define MF4015_ANGLE_CENTER 0x7FFF // センター位置  for 16bit Encode
 
 // --- MF4015 トルク範囲 ---
 #define MF4015_TORQUE_MIN -2048 // トルク電流指令値 最小

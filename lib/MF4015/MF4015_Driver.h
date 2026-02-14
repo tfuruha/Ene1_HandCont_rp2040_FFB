@@ -60,6 +60,13 @@ public:
 
   // --- ゲッター ---
   uint16_t getEncoderValue() const { return status.encoder; }
+
+  /**
+   * @brief センターオフセットおよび範囲制限を適用したステアリング値を取得
+   * @return int16_t 処理済みのステアリング値 (左負, 右正)
+   */
+  int16_t getSteerValue() const;
+
   const Status &getStatus() const { return status; }
 
 private:

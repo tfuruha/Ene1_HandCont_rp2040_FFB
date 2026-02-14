@@ -2,6 +2,7 @@
 #define MCP2515_WRAPPER_H
 
 #include <CANInterface.h> // includeディレクトリから参照
+#include <cstdint>
 
 // 前方宣言（MCP2515の詳細をヘッダーから隠蔽）
 class MCP2515;
@@ -29,18 +30,18 @@ struct can_frame;
  * CANInterfaceを継承し、MCP2515固有の実装を提供します。
  */
 class MCP2515_Wrapper : public CANInterface {
-private:
-  MCP2515 *mcp2515;   ///< MCP2515インスタンスへのポインタ
-  uint8_t csPin;      ///< CSピン番号
-  can_frame *rxFrame; ///< 受信フレーム用バッファ
-
 public:
   /**
    * @brief コンストラクタ
    *
    * @param cs CSピン番号
+   * @param sck SPI SCKピン番号
+   * @param mosi SPI MOSI (TX)ピン番号
+   * @param miso SPI MISO (RX)ピン番号
+   * @param interrupt MCP2515 INTピン番号
    */
-  explicit MCP2515_Wrapper(uint8_t cs);
+  explicit MCP2515_Wrapper(uint8_t cs, uint8_t sck, uint8_t mosi, uint8_t miso,
+                           uint8_t interrupt);
 
   /**
    * @brief デストラクタ
@@ -96,6 +97,22 @@ public:
    * @return true: 受信データあり, false: 受信データなし
    */
   bool available() override;
+
+  /**
+   * @brief 最後に発生したエラーコードを取得
+   * @return MCP2515::ERROR 列挙型の値
+   */
+  uint8_t getLastError() const { return lastError; }
+
+private:
+  MCP2515 *mcp2515;   ///< MCP2515インスタンスへのポインタ
+  uint8_t csPin;      ///< CSピン番号
+  uint8_t sckPin;     ///< SPI SCKピン番号
+  uint8_t mosiPin;    ///< SPI MOSIピン番号
+  uint8_t misoPin;    ///< SPI MISOピン番号
+  uint8_t intPin;     ///< MCP2515 INTピン番号
+  can_frame *rxFrame; ///< 受信フレーム用バッファ
+  uint8_t lastError;  ///< 最後に発生したエラーコード
 };
 
 #endif // MCP2515_WRAPPER_H

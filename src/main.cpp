@@ -23,7 +23,8 @@
 SharedData sharedData = {0};
 
 // CANバスラッパー (MCP2515固有の実装を内包)
-MCP2515_Wrapper canWrapper(PIN_CAN_CS);
+MCP2515_Wrapper canWrapper(PIN_CAN_CS, PIN_SPI_SCK, PIN_SPI_TX, PIN_SPI_RX,
+                           PIN_SPI_INT);
 
 // MF4015モータードライバ (抽象インターフェースに依存)
 MF4015_Driver mfMotor(&canWrapper, MF4015_CAN_ID);
@@ -42,7 +43,7 @@ static custom_gamepad_report_t core1_input_report = {0};
 static FFB_Shared_State_t core1_effects[MAX_EFFECTS];
 
 void setup() {
-  Serial.begin(SERIAL_BAUDRATE);
+  // Serial.begin(SERIAL_BAUDRATE);
 
   // 設定管理の初期化と復元
   if (ConfigManager::begin()) {
@@ -92,7 +93,10 @@ void loop() {
 void setup1() {
   // CANインターフェースのポインタをグローバルにも紐付け
   canBus = &canWrapper;
-
+  Serial.begin(SERIAL_BAUDRATE);
+  uint32_t start_time = millis();
+  while (!Serial && (millis() - start_time < 3000))
+    ; // CAN初期化のメッセージ取得のため3秒待機
   // IOの初期化
   diKeyUp.Init();
   diKeyDown.Init();
@@ -106,7 +110,30 @@ void setup1() {
     // モーターを有効化
     mfMotor.enable();
   } else {
-    Serial.println("Core 1: CAN Init FAILED!");
+    uint8_t err = canWrapper.getLastError();
+    Serial.printf("Core 1: CAN Init FAILED! Error Code: %d (CS Pin: %d)\n", err,
+                  PIN_CAN_CS);
+    Serial.print("  Hint: ");
+    switch (err) {
+    case 1:
+      Serial.println("ERROR_FAIL (MCP2515 not responding/Reset failed)");
+      break;
+    case 2:
+      Serial.println("ERROR_ALLTXBUSY");
+      break;
+    case 3:
+      Serial.println("ERROR_FAILINIT (Bitrate setting failed)");
+      break;
+    case 4:
+      Serial.println("ERROR_FAILTX");
+      break;
+    case 5:
+      Serial.println("ERROR_NOMSG");
+      break;
+    default:
+      Serial.println("Unknown error");
+      break;
+    }
   }
   stearContTrigger.init();
   sharedData.lastCore1Micros = micros();
@@ -146,8 +173,8 @@ void loop1() {
     ffb_core1_update_shared(&core1_input_report, core1_effects);
 
     // A. ドライバから読み取ったステータスを格納
-    // ステアリング角度を -32767..32767 の範囲にスケーリング
-    core1_input_report.steer = (int16_t)mfMotor.getEncoderValue();
+    // ステアリング角度をセンターオフセット適用および範囲制限して取得
+    core1_input_report.steer = mfMotor.getSteerValue();
 
     // B. 他のIO（ペダル等）の読み取り
     if (sampleTrigger.hasExpired()) {

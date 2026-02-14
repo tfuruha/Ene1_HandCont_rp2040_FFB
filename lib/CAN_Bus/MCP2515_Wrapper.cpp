@@ -8,17 +8,24 @@
  */
 
 #include "MCP2515_Wrapper.h"
+#include <SPI.h>
 #include <mcp2515.h> // MCP2515ライブラリ（このファイル内でのみインクルード）
 
 /**
  * @brief コンストラクタ
  *
- * MCP2515インスタンスを生成し、CSピンを設定します。
+ * MCP2515インスタンスを生成し、各ピンを設定します。
  *
  * @param cs CSピン番号
+ * @param sck SPI SCKピン番号
+ * @param mosi SPI MOSIピン番号
+ * @param miso SPI MISOピン番号
+ * @param interrupt MCP2515 INTピン番号
  */
-MCP2515_Wrapper::MCP2515_Wrapper(uint8_t cs)
-    : csPin(cs), mcp2515(nullptr), rxFrame(nullptr) {
+MCP2515_Wrapper::MCP2515_Wrapper(uint8_t cs, uint8_t sck, uint8_t mosi,
+                                 uint8_t miso, uint8_t interrupt)
+    : csPin(cs), sckPin(sck), mosiPin(mosi), misoPin(miso), intPin(interrupt),
+      mcp2515(nullptr), rxFrame(nullptr) {
   // MCP2515インスタンスを動的に生成
   mcp2515 = new MCP2515(csPin);
 
@@ -56,6 +63,20 @@ bool MCP2515_Wrapper::begin() {
     return false;
   }
 
+  // 最後に発生したエラーをクリア (OK = 0)
+  lastError = MCP2515::ERROR_OK;
+
+  // SPIの初期化 (RP2040耳のコア固有の設定)
+  SPI.setRX(misoPin);
+  SPI.setTX(mosiPin);
+  SPI.setSCK(sckPin);
+  SPI.begin();
+
+  // INTピンの初期化 (外部プルアップを想定しているが、安全のため入力設定)
+  if (intPin != 255) {
+    pinMode(intPin, INPUT_PULLUP);
+  }
+
   // MCP2515をリセット
   mcp2515->reset();
 
@@ -63,12 +84,14 @@ bool MCP2515_Wrapper::begin() {
   // CAN_500KBPS: 500kbps, MCP_16MHZ: 16MHz クロック
   MCP2515::ERROR result = mcp2515->setBitrate(CAN_500KBPS, MCP_16MHZ);
   if (result != MCP2515::ERROR_OK) {
+    lastError = static_cast<uint8_t>(result);
     return false;
   }
 
   // ノーマルモードに設定
   result = mcp2515->setNormalMode();
   if (result != MCP2515::ERROR_OK) {
+    lastError = static_cast<uint8_t>(result);
     return false;
   }
 
@@ -156,6 +179,11 @@ bool MCP2515_Wrapper::available() {
     return false;
   }
 
-  // 受信バッファをチェック
+  // INTピンが設定されている場合はピンの状態を確認 (Active Low)
+  if (intPin != 255) {
+    return (digitalRead(intPin) == LOW);
+  }
+
+  // 受信バッファをチェック (フォールバック: SPI通信)
   return mcp2515->checkReceive();
 }

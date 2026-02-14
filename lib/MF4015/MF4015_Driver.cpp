@@ -4,6 +4,7 @@
  */
 
 #include "MF4015_Driver.h"
+#include "config.h"
 
 MF4015_Driver::MF4015_Driver(CANInterface *canInterface, uint32_t motorCanId)
     : can(canInterface), canId(motorCanId) {
@@ -88,4 +89,19 @@ bool MF4015_Driver::parseFrame(uint32_t id, uint8_t len, const uint8_t *data) {
   }
 
   return true;
+}
+
+int16_t MF4015_Driver::getSteerValue() const {
+  // 1. センターオフセットを適用 (生値 - センター)
+  // int32_t を使うことでマイナス方向の計算を安全に行う
+  int32_t relativePos = (int32_t)status.encoder - MF4015_ANGLE_CENTER;
+
+  // 2. 範囲制限 (クランプ処理)
+  if (relativePos < MF4015_ANGLE_MIN) {
+    relativePos = MF4015_ANGLE_MIN;
+  } else if (relativePos > MF4015_ANGLE_MAX) {
+    relativePos = MF4015_ANGLE_MAX;
+  }
+
+  return (int16_t)relativePos;
 }
