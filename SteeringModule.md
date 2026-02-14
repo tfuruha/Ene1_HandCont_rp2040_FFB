@@ -20,31 +20,33 @@ LKTECH [MF4015 モータ](http://en.lkmotor.cn/ProDetail.aspx?ProId=256)を使�
 
 ## 3. 通信仕様 (CAN Bus)
 - **ビットレート**: 500kbps (16MHz Clock)
-- **ノードID**: 0x141 (デフォルト ID: 1)
-- **周期**: 1ms (`STEAR_CONT_INTERVAL_US`) - RP2040 Core 1 にて実行
+- **ノードID**: 0x141 (Config::Steer::CAN_ID)
+- **周期**: 1ms (Config::Time::STEAR_CONT_INTERVAL_US) - RP2040 Core 1 にて実行
 
 ## 4. 角度取得機能
-1ms周期でモータへ要求を送信、または応答パケットを解析してエンコーダ値を更新する。
+1ms周期でモータへのステータス要求（コマンド 0x90 または 0xA1 の自動応答、またはエラー監視用の 0x9A）を解析してエンコーダ値を更新する。
 
 ### 4.1 信号処理
 - **解像度**: 16bit (0 ～ 65535) 
 - **動作範囲**: 
-  - 本機では ±30度（±5461）を有効範囲とする。
-  - 取得した値は `-32767` ～ `32767` の 16bit 符号付き整数にスケーリングされ、USB HID（Z軸）として Core 0 へ渡される。
+  - 本機では左右約30度（Config::Steer::ANGLE_MIN / ANGLE_MAX）を有効範囲とする。
+  - 取得した値はセンターオフセット（Config::Steer::ANGLE_CENTER）を基準に演算され、`-32767` ～ `32767` の 16bit 符号付き整数として、USB HID（X軸）として送信される。
+  - **位相反転**: モーターの回転方向とコントローラーの入力方向を合わせるため、計算時に位相を反転させている。
 
-## 5. トルク制御機能 (FFB)
-ホストPC（Assetto Corsa等）からの FFB 命令に基づき、モータへトルク電流指令を送信する。
+## 5. トルク制御およびエラー管理 (FFB)
+ホストPCからの FFB 命令および自身の状態に基づき、安全に制御を行う。
 
 ### 5.1 コマンドと制限
 - **送信コマンド**: `0xA1` (Torque closed loop control command)
-- **トルク指令値**: int16_t (-2048 ～ 2048)
+- **トルク指令値**: int16_t (Config::Steer::TORQUE_MIN ～ TORQUE_MAX)
   - 対応電流: -16.5A ～ 16.5A (MF4015仕様)
-- **安全設計**:
-  - `sharedData.targetTorque` を介して常時更新。
-  - 通信途絶やエラー検知時には自動的に `stop()` または `disable()` を実行。
+- **エラー処理**:
+  * `requestStatus1()` (0x9A) により、低電圧保護や過熱保護の状態を監視。
+  * `clearError()` (0x9B) により、エラー状態からのソフトウェア復帰が可能。
 
 ## 6. 制御フロー (Core 1)
 1. `canWrapper.available()` で受信確認（INTピン監視）。
-2. データがあれば `canWrapper.readFrame()` で取得し、`mfMotor.parseFrame()` で解析・更新。
+2. データがあれば `canWrapper.readFrame()` で取得し、`mfMotor.parseFrame()` で解析・状態更新。
 3. 共有メモリから取得した目標トルクに基づき、`mfMotor.setTorque()` で指令値を送信。
-4. 最新のエンコーダ値を共有メモリへ書き戻し、Core 0 経由でPCへ送信。
+4. 最新のステアリング値を共有メモリへ書き戻し、Core 0 経由でPCへ送信。
+   - `mfMotor.getSteerValue()` により、センターオフセットと範囲制限が適用された値が取得される。

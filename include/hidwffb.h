@@ -49,9 +49,9 @@
  * Core 1 -> Core 0 (物理入力/レポート用)を兼ねる
  */
 typedef struct {
-  int16_t steer;    ///< 操舵 (Z軸: 0x32) [-32767 to 32767]
-  int16_t accel;    ///< アクセル (Rx軸: 0x33) [-32767 to 32767]
-  int16_t brake;    ///< ブレーキ (Ry軸: 0x34) [-32767 to 32767]
+  int16_t steer;    ///< ハンドル (X軸: 0x30) 符号付き16bit [-32767 to 32767]
+  uint16_t accel;   ///< アクセル (Z軸: 0x32) 符号なし16bit [0 to 65535]
+  uint16_t brake;   ///< ブレーキ (Rz軸: 0x35) 符号なし16bit [0 to 65535]
   uint16_t buttons; ///< ボタン (16ビット分) [1:Pressed, 0:Released]
 } custom_gamepad_report_t;
 

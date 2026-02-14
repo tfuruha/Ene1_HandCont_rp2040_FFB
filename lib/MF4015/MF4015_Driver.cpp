@@ -31,12 +31,22 @@ void MF4015_Driver::requestEncoder() {
   sendCommand(CMD_READ_ENC, data, 7);
 }
 
+void MF4015_Driver::clearError() {
+  uint8_t data[8] = {0};
+  sendCommand(CMD_CLEAR_ERR, data, 7);
+}
+
+void MF4015_Driver::requestStatus1() {
+  uint8_t data[8] = {0};
+  sendCommand(CMD_READ_STAT1, data, 7);
+}
+
 void MF4015_Driver::setTorque(int16_t torque) {
-  // 範囲制限 (-2048 ～ 2048)
-  if (torque < -2048)
-    torque = -2048;
-  if (torque > 2048)
-    torque = 2048;
+  // 範囲制限
+  if (torque < Config::Steer::TORQUE_MIN)
+    torque = Config::Steer::TORQUE_MIN;
+  if (torque > Config::Steer::TORQUE_MAX)
+    torque = Config::Steer::TORQUE_MAX;
 
   uint8_t data[8] = {0};
   data[0] = torque & 0xFF;        // Low byte
@@ -86,6 +96,12 @@ bool MF4015_Driver::parseFrame(uint32_t id, uint8_t len, const uint8_t *data) {
     status.torqueCurrent = (int16_t)(data[2] | (data[3] << 8));
     status.speed = (int16_t)(data[4] | (data[5] << 8));
     status.encoder = (uint16_t)(data[6] | (data[7] << 8));
+  } else if (cmd == CMD_READ_STAT1) {
+    // 状態1の応答: data[7] がエラー状態フラグ(低電圧、過熱)
+    // bit 0: Voltage state | 0 Normal/ 1 UnderVoltage Potect
+    // bit 3: Temperature state | 0 Normal/ 1 OverTemperature Potect
+    // その他bitはinvalid
+    status.errorState = data[7];
   }
 
   return true;
@@ -94,13 +110,14 @@ bool MF4015_Driver::parseFrame(uint32_t id, uint8_t len, const uint8_t *data) {
 int16_t MF4015_Driver::getSteerValue() const {
   // 1. センターオフセットを適用 (生値 - センター)
   // int32_t を使うことでマイナス方向の計算を安全に行う
-  int32_t relativePos = (int32_t)status.encoder - MF4015_ANGLE_CENTER;
+  // HIDレポートはモータ座標に対して逆位相なので、反転させる
+  int32_t relativePos = Config::Steer::ANGLE_CENTER - (int32_t)status.encoder;
 
   // 2. 範囲制限 (クランプ処理)
-  if (relativePos < MF4015_ANGLE_MIN) {
-    relativePos = MF4015_ANGLE_MIN;
-  } else if (relativePos > MF4015_ANGLE_MAX) {
-    relativePos = MF4015_ANGLE_MAX;
+  if (relativePos < Config::Steer::ANGLE_MIN) {
+    relativePos = Config::Steer::ANGLE_MIN;
+  } else if (relativePos > Config::Steer::ANGLE_MAX) {
+    relativePos = Config::Steer::ANGLE_MAX;
   }
 
   return (int16_t)relativePos;

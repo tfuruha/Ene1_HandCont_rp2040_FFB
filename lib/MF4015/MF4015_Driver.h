@@ -22,7 +22,8 @@ public:
     int16_t speed;         ///< 回転速度
     int16_t torqueCurrent; ///< トルク電流
     int8_t temperature;    ///< モーター温度
-    uint8_t errorState;    ///< エラー状態
+    uint8_t errorState;    ///< エラー状態 bit 0: 1 Under Voltage Potect
+                           ///< bit 3: 1 Over temperature protect
   };
 
   /**
@@ -42,6 +43,8 @@ public:
    * @param torque トルク値 (-2048 ～ 2048)
    */
   void setTorque(int16_t torque);
+  void clearError();     ///< エラー状態のクリア (0x9B)
+  void requestStatus1(); ///< 状態1/エラーフラグの要求 (0x9A)
 
   /**
    * @brief エンコーダ読み取りリクエストの送信
@@ -80,6 +83,12 @@ private:
   static constexpr uint8_t CMD_MOTOR_STOP = 0x81;
   static constexpr uint8_t CMD_TORQUE_CTRL = 0xA1;
   static constexpr uint8_t CMD_READ_ENC = 0x90;
+  static constexpr uint8_t CMD_READ_STAT1 = 0x9A;
+  static constexpr uint8_t CMD_CLEAR_ERR = 0x9B;
+
+  // デフォルト設定値
+  static constexpr uint32_t DEFAULT_CAN_ID = 0x141;
+  static constexpr int16_t DEFAULT_TORQUE_LIMIT = 2048;
 
   void sendCommand(uint8_t cmd, const uint8_t *data = nullptr, uint8_t len = 0);
 };

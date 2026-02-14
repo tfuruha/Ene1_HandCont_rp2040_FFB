@@ -59,7 +59,7 @@ static void MF_Cmd00(uint8_t cmd) {
   }
 
   uint8_t data[8] = {cmd, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-  canBus->sendFrame(MF4015_CAN_ID, 8, data);
+  canBus->sendFrame(Config::Steer::CAN_ID, 8, data);
 }
 
 /**
@@ -144,10 +144,10 @@ void MF_SetTorque(int16_t iTorquVal) {
   }
 
   // トルク値の範囲制限
-  if (iTorquVal < MF4015_TORQUE_MIN)
-    iTorquVal = MF4015_TORQUE_MIN;
-  else if (iTorquVal > MF4015_TORQUE_MAX)
-    iTorquVal = MF4015_TORQUE_MAX;
+  if (iTorquVal < Config::Steer::TORQUE_MIN)
+    iTorquVal = Config::Steer::TORQUE_MIN;
+  else if (iTorquVal > Config::Steer::TORQUE_MAX)
+    iTorquVal = Config::Steer::TORQUE_MAX;
 
   // int16_tをバイト分割
   uint8_t CurrentLowByte = (uint8_t)(iTorquVal & 0x00FF);
@@ -157,7 +157,7 @@ void MF_SetTorque(int16_t iTorquVal) {
   uint8_t data[8] = {CmdClsTrqu,     0x00,          0x00, 0x00,
                      CurrentLowByte, CurrentHiByte, 0x00, 0x00};
 
-  canBus->sendFrame(MF4015_CAN_ID, 8, data);
+  canBus->sendFrame(Config::Steer::CAN_ID, 8, data);
 }
 
 /**
@@ -184,7 +184,7 @@ bool chk_MF_rxBuffer() {
   // CANフレームを受信
   if (canBus->readFrame(id, len, data)) {
     // MF4015からの応答かチェック
-    if (id == MF4015_CAN_ID && len == 8) {
+    if (id == Config::Steer::CAN_ID && len == 8) {
       // コマンドタイプに応じてエンコーダ値を抽出
       if (data[0] == CmdReadEnc) {
         EncValue = getEncValue(data);

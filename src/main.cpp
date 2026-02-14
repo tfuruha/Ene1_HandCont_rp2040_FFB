@@ -23,19 +23,20 @@
 SharedData sharedData = {0};
 
 // CANバスラッパー (MCP2515固有の実装を内包)
-MCP2515_Wrapper canWrapper(PIN_CAN_CS, PIN_SPI_SCK, PIN_SPI_TX, PIN_SPI_RX,
-                           PIN_SPI_INT);
+MCP2515_Wrapper canWrapper(Config::Pin::CAN_CS, Config::Pin::SPI_SCK,
+                           Config::Pin::SPI_TX, Config::Pin::SPI_RX,
+                           Config::Pin::SPI_INT);
 
 // MF4015モータードライバ (抽象インターフェースに依存)
-MF4015_Driver mfMotor(&canWrapper, MF4015_CAN_ID);
+MF4015_Driver mfMotor(&canWrapper, Config::Steer::CAN_ID);
 
 // mf4015.cpp (旧コードとの互換用) で使用する extern ポインタも一応紐付けておく
 extern CANInterface *canBus;
 
 // --- 周期管理 ---
-static IntervalTrigger_m hidReportTrigger(HIDREPO_INTERVAL_MS);
-static IntervalTrigger_u stearContTrigger(STEAR_CONT_INTERVAL_US);
-static IntervalTrigger_m sampleTrigger(SAMPLING_INTERVAL_MS);
+static IntervalTrigger_m hidReportTrigger(Config::Time::HIDREPO_INTERVAL_MS);
+static IntervalTrigger_u stearContTrigger(Config::Time::STEAR_CONT_INTERVAL_US);
+static IntervalTrigger_m sampleTrigger(Config::Time::SAMPLING_INTERVAL_MS);
 
 // --- Core間通信用 (hidwffb.h に実体があるが main.cpp でも管理が必要なフラグ等)
 // ---
@@ -43,7 +44,7 @@ static custom_gamepad_report_t core1_input_report = {0};
 static FFB_Shared_State_t core1_effects[MAX_EFFECTS];
 
 void setup() {
-  // Serial.begin(SERIAL_BAUDRATE);
+  // Serial.begin(Config::SERIAL_BAUDRATE);
 
   // 設定管理の初期化と復元
   if (ConfigManager::begin()) {
@@ -93,7 +94,7 @@ void loop() {
 void setup1() {
   // CANインターフェースのポインタをグローバルにも紐付け
   canBus = &canWrapper;
-  Serial.begin(SERIAL_BAUDRATE);
+  Serial.begin(Config::SERIAL_BAUDRATE);
   uint32_t start_time = millis();
   while (!Serial && (millis() - start_time < 3000))
     ; // CAN初期化のメッセージ取得のため3秒待機
@@ -112,7 +113,7 @@ void setup1() {
   } else {
     uint8_t err = canWrapper.getLastError();
     Serial.printf("Core 1: CAN Init FAILED! Error Code: %d (CS Pin: %d)\n", err,
-                  PIN_CAN_CS);
+                  Config::Pin::CAN_CS);
     Serial.print("  Hint: ");
     switch (err) {
     case 1:

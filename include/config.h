@@ -4,100 +4,99 @@
 /**
  * @file config.h
  * @brief Ene1_HandCont_rp2040_FFB プロジェクト全体の設定ファイル
- * @date 2026-01-23
- *
- * このファイルにはピンアサイン、通信設定、タイミング定数など、
- * プロジェクト全体で使用する定数を集約しています。
- * 各モジュールはこのファイルを参照し、ハードコードを避けてください。
- *
- * 仕様書: SpecSummary20260118.txt
  */
+
+#include <stdint.h>
+
+namespace Config {
 
 // ============================================================================
 // ピンアサイン定義
 // ============================================================================
+namespace Pin {
+static constexpr uint8_t SPI_INT = 1; // SPI INT*
+static constexpr uint8_t SPI_SCK = 2; // SPI Clock
+static constexpr uint8_t SPI_TX = 3;  // SPI MOSI (TX)
+static constexpr uint8_t SPI_RX = 4;  // SPI MISO (RX)
+static constexpr uint8_t CAN_CS = 5;  // MCP2515 Chip Select
 
-// --- SPI通信ピン (MCP2515 CAN Controller) ---
-#define PIN_SPI_INT 1 // SPI INT*
-#define PIN_SPI_SCK 2 // SPI Clock
-#define PIN_SPI_TX 3  // SPI MOSI (TX)
-#define PIN_SPI_RX 4  // SPI MISO (RX)
-#define PIN_CAN_CS 5  // MCP2515 Chip Select
+static constexpr uint8_t SHIFT_UP = 14;   // シフトアップボタン (D6, Active Low)
+static constexpr uint8_t SHIFT_DOWN = 15; // シフトダウンボタン (D7, Active Low)
 
-// --- デジタル入力ピン (シフトスイッチ) ---
-#define PIN_SHIFT_UP 14   // シフトアップボタン (D6, Active Low)
-#define PIN_SHIFT_DOWN 15 // シフトダウンボタン (D7, Active Low)
-
-// --- アナログ入力ピン (ペダル) ---
-#define PIN_ACCEL 26 // ADC0 (A0) - アクセルペダル
-#define PIN_BRAKE 28 // ADC2 (A2) - ブレーキペダル
+static constexpr uint8_t ACCEL = 26; // ADC0 (A0) - アクセルペダル
+static constexpr uint8_t BRAKE = 28; // ADC2 (A2) - ブレーキペダル
+} // namespace Pin
 
 // ============================================================================
-// CAN通信設定
+// CAN通信 / モーター設定
 // ============================================================================
+namespace Steer {
+static constexpr uint32_t CAN_ID = 0x141; // MF4015のCAN ID
+static constexpr uint8_t DEVICE_ID = 1;   // MF4015デバイスID
 
-// --- MCP2515設定 ---
-// 注: CAN通信の設定値は mcp2515.h で定義されている enum 型を使用します
-// 実際の設定は mf4015.cpp の SetupMCP2515_MF() 関数内で行います
-// 参考値: CAN_500KBPS (500kbps), MCP_8MHZ (16MHz クロック)
+static constexpr int32_t ANGLE_MIN = -5461; // 有効角度範囲 最小値 (-30度相当)
+static constexpr int32_t ANGLE_MAX = 5461;  // 有効角度範囲 最大値 (+30度相当)
+static constexpr uint16_t ANGLE_CENTER = 0x7FFF; // センター位置
 
-// --- MF4015 ステアリングモーター設定 ---
-#define MF4015_CAN_ID 0x141 // MF4015のCAN ID (0x140 + ID1)
-#define MF4015_DEVICE_ID 1  // MF4015デバイスID (1-32)
-
-// --- MF4015 角度範囲 ---
-#define MF4015_ANGLE_MIN -5461     // 有効角度範囲 最小値 (-30度相当)
-#define MF4015_ANGLE_MAX 5461      // 有効角度範囲 最大値 (+30度相当)
-#define MF4015_ANGLE_CENTER 0x7FFF // センター位置  for 16bit Encode
-
-// --- MF4015 トルク範囲 ---
-#define MF4015_TORQUE_MIN -2048 // トルク電流指令値 最小
-#define MF4015_TORQUE_MAX 2048  // トルク電流指令値 最大
+static constexpr int16_t TORQUE_MIN = -2048; // トルク電流指令値 最小
+static constexpr int16_t TORQUE_MAX = 2048;  // トルク電流指令値 最大
+} // namespace Steer
 
 // ============================================================================
 // タイミング設定
 // ============================================================================
-
-#define SAMPLING_INTERVAL_MS 1      // ADC/DI サンプリング周期 (ms)
-#define HIDREPO_INTERVAL_MS 2       // HIDレポート送信周期 (ms)
-#define STEAR_CONT_INTERVAL_US 1000 //(FFD含む)ステアリング制御インターバル(us)
+namespace Time {
+static constexpr uint32_t SAMPLING_INTERVAL_MS =
+    1; // ADC/DI サンプリング周期 (ms)
+static constexpr uint32_t HIDREPO_INTERVAL_MS = 2; // HIDレポート送信周期 (ms)
+static constexpr uint32_t STEAR_CONT_INTERVAL_US =
+    1000; // ステアリング制御インターバル(us)
+} // namespace Time
 
 // ============================================================================
 // アナログ入力設定
 // ============================================================================
+namespace Adc {
+static constexpr uint16_t ACCEL_MIN = 180; // ADC最小値 (10bit基準)
+static constexpr uint16_t ACCEL_MAX = 890; // ADC最大値 (10bit基準)
 
-// --- アクセルペダル (電圧入力 0.5V - 2.8V) ---
-#define ACCEL_ADC_MIN 180 // ADC最小値 (10bit基準)
-#define ACCEL_ADC_MAX 890 // ADC最大値 (10bit基準)
+static constexpr uint32_t ACCEL_HID_MIN = 0;
+static constexpr uint32_t ACCEL_HID_MAX = 65535;
 
-// --- ブレーキペダル (プルアップ抵抗式面圧センサ) ---
-#define BRAKE_ADC_MIN 100 // ADC最小値 (10bit基準)
-#define BRAKE_ADC_MAX 820 // ADC最大値 (10bit基準)
-#define BRAKE_INVERT true // 踏み込み時にADC値が下がるため反転処理が必要
+static constexpr uint16_t BRAKE_MIN = 100; // ADC最小値 (10bit基準)
+static constexpr uint16_t BRAKE_MAX = 820; // ADC最大値 (10bit基準)
 
-// --- 移動平均フィルタ設定 ---
-#define ADC_BUFFER_SIZE 20  // 移動平均バッファサイズ
-#define ADC_AVERAGE_COUNT 8 // 移動平均サンプル数
+static constexpr uint32_t BRAKE_HID_MIN = 0;
+static constexpr uint32_t BRAKE_HID_MAX = 65535;
+
+static constexpr uint8_t BUFFER_SIZE = 20;  // 移動平均バッファサイズ
+static constexpr uint8_t AVERAGE_COUNT = 8; // 移動平均サンプル数
+} // namespace Adc
 
 // ============================================================================
 // デジタル入力設定
 // ============================================================================
-
-// --- チャタリング防止 ---
-#define BUTTON_DEBOUNCE_THRESHOLD 4 // 連続一致サンプル数
+namespace Input {
+static constexpr uint8_t BUTTON_DEBOUNCE_THRESHOLD = 4; // 連続一致サンプル数
+}
 
 // ============================================================================
 // USB HID設定
 // ============================================================================
-
-#define HID_BUTTON_COUNT 2 // ボタン数 (UP: Button 0, DOWN: Button 1)
-#define HID_AXIS_COUNT 3   // 軸数 (Steering, Accelerator, Brake)
+namespace Hid {
+static constexpr uint8_t BUTTON_COUNT = 2; // ボタン数
+static constexpr uint8_t AXIS_COUNT = 3;   // 軸数
+} // namespace Hid
 
 // ============================================================================
 // システム設定
 // ============================================================================
+static constexpr uint32_t SERIAL_BAUDRATE = 115200;
 
-#define SERIAL_BAUDRATE 115200 // シリアル通信ボーレート (デバッグ用)
+} // namespace Config
 
-#define PHYSICAL_INPUT_DEBUG_ENABLE // 物理入力のデバッグ出力を有効にする
-#endif                              // CONFIG_H
+// プリプロセッサフラグは明示的に残す
+#define BRAKE_INVERT true           // ブレーキの入力値を反転させる
+#define PHYSICAL_INPUT_DEBUG_ENABLE // 物理入力のデバッグを有効にする
+
+#endif // CONFIG_H
