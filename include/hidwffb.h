@@ -120,7 +120,7 @@ typedef struct {
   int16_t gain; ///< 0x01 で設定される Gain
   uint8_t type;
   volatile bool active;
-  volatile bool isCoolBackTest; ///< 5秒間のテストモードフラグ
+  volatile bool isCallBackTest; ///< 5秒間のテストモードフラグ
 } FFB_Shared_State_t;
 
 // --- 公開関数 ---

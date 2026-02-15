@@ -273,7 +273,7 @@ void ffb_core0_update_shared(pid_debug_info_t *info) {
       shared_ffb_effects[i] = core0_ffb_effects[i];
       // Core0 側でタイマー管理しているフラグを共有メモリに反映
       if (info != NULL) {
-        shared_ffb_effects[i].isCoolBackTest =
+        shared_ffb_effects[i].isCallBackTest =
             info->updated; // 暫定：後ほど main.cpp で管理
       }
     }
@@ -306,8 +306,8 @@ void hidwffb_loopback_test_sync(custom_gamepad_report_t *new_input,
 
 #ifdef CALLBACK_TEST_ENABLE
   // 2. 受け取った命令に基づいて入力を捏造する (ループバック)
-  // isCoolBackTest が true の間だけ多軸ループバックを実施
-  if (local_effects_dest[0].isCoolBackTest) {
+  // isCallBackTest が true の間だけ多軸ループバックを実施
+  if (local_effects_dest[0].isCallBackTest) {
     new_input->steer = local_effects_dest[0].magnitude;
     new_input->accel = local_effects_dest[0].gain;
     new_input->brake = (int16_t)shared_global_gain; // uint8_t -> int16_t
@@ -326,13 +326,13 @@ void hidwffb_loopback_test_sync(custom_gamepad_report_t *new_input,
   static int16_t last_mag = 0;
   static bool last_cool = false;
   if (local_effects_dest[0].magnitude != last_mag ||
-      local_effects_dest[0].isCoolBackTest != last_cool) {
+      local_effects_dest[0].isCallBackTest != last_cool) {
     Serial.print("[CORE1_DEBUG] Mag:");
     Serial.print(local_effects_dest[0].magnitude);
-    Serial.print(", CoolBack:");
-    Serial.println(local_effects_dest[0].isCoolBackTest);
+    Serial.print(", CallBack:");
+    Serial.println(local_effects_dest[0].isCallBackTest);
     last_mag = local_effects_dest[0].magnitude;
-    last_cool = local_effects_dest[0].isCoolBackTest;
+    last_cool = local_effects_dest[0].isCallBackTest;
   }
 #endif
 

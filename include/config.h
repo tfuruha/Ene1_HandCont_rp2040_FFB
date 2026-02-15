@@ -14,42 +14,42 @@ namespace Config {
 // ピンアサイン定義
 // ============================================================================
 namespace Pin {
-static constexpr uint8_t SPI_INT = 1; // SPI INT*
-static constexpr uint8_t SPI_SCK = 2; // SPI Clock
-static constexpr uint8_t SPI_TX = 3;  // SPI MOSI (TX)
-static constexpr uint8_t SPI_RX = 4;  // SPI MISO (RX)
-static constexpr uint8_t CAN_CS = 5;  // MCP2515 Chip Select
+inline constexpr uint8_t SPI_INT = 1; // SPI INT*
+inline constexpr uint8_t SPI_SCK = 2; // SPI Clock
+inline constexpr uint8_t SPI_TX = 3;  // SPI MOSI (TX)
+inline constexpr uint8_t SPI_RX = 4;  // SPI MISO (RX)
+inline constexpr uint8_t CAN_CS = 5;  // MCP2515 Chip Select
 
-static constexpr uint8_t SHIFT_UP = 14;   // シフトアップボタン (D6, Active Low)
-static constexpr uint8_t SHIFT_DOWN = 15; // シフトダウンボタン (D7, Active Low)
+inline constexpr uint8_t SHIFT_UP = 14;   // シフトアップボタン (D6, Active Low)
+inline constexpr uint8_t SHIFT_DOWN = 15; // シフトダウンボタン (D7, Active Low)
 
-static constexpr uint8_t ACCEL = 26; // ADC0 (A0) - アクセルペダル
-static constexpr uint8_t BRAKE = 28; // ADC2 (A2) - ブレーキペダル
+inline constexpr uint8_t ACCEL = 26; // ADC0 (A0) - アクセルペダル
+inline constexpr uint8_t BRAKE = 28; // ADC2 (A2) - ブレーキペダル
 } // namespace Pin
 
 // ============================================================================
 // CAN通信 / モーター設定
 // ============================================================================
 namespace Steer {
-static constexpr uint32_t CAN_ID = 0x141; // MF4015のCAN ID
-static constexpr uint8_t DEVICE_ID = 1;   // MF4015デバイスID
+inline constexpr uint32_t CAN_ID = 0x141; // MF4015のCAN ID
+inline constexpr uint8_t DEVICE_ID = 1;   // MF4015デバイスID
 
-static constexpr int32_t ANGLE_MIN = -5461; // 有効角度範囲 最小値 (-30度相当)
-static constexpr int32_t ANGLE_MAX = 5461;  // 有効角度範囲 最大値 (+30度相当)
-static constexpr uint16_t ANGLE_CENTER = 0x7FFF; // センター位置
+inline constexpr int32_t ANGLE_MIN = -5461; // 有効角度範囲 最小値 (-30度相当)
+inline constexpr int32_t ANGLE_MAX = 5461;  // 有効角度範囲 最大値 (+30度相当)
+inline constexpr uint16_t ANGLE_CENTER = 0x7FFF; // センター位置
 
-static constexpr int16_t TORQUE_MIN = -2048; // トルク電流指令値 最小
-static constexpr int16_t TORQUE_MAX = 2048;  // トルク電流指令値 最大
+inline constexpr int16_t TORQUE_MIN = -2048; // トルク電流指令値 最小
+inline constexpr int16_t TORQUE_MAX = 2048;  // トルク電流指令値 最大
 } // namespace Steer
 
 // ============================================================================
 // タイミング設定
 // ============================================================================
 namespace Time {
-static constexpr uint32_t SAMPLING_INTERVAL_MS =
+inline constexpr uint32_t SAMPLING_INTERVAL_MS =
     1; // ADC/DI サンプリング周期 (ms)
-static constexpr uint32_t HIDREPO_INTERVAL_MS = 2; // HIDレポート送信周期 (ms)
-static constexpr uint32_t STEAR_CONT_INTERVAL_US =
+inline constexpr uint32_t HIDREPO_INTERVAL_MS = 2; // HIDレポート送信周期 (ms)
+inline constexpr uint32_t STEAR_CONT_INTERVAL_US =
     1000; // ステアリング制御インターバル(us)
 } // namespace Time
 
@@ -57,41 +57,41 @@ static constexpr uint32_t STEAR_CONT_INTERVAL_US =
 // アナログ入力設定
 // ============================================================================
 namespace Adc {
-static constexpr uint16_t ACCEL_MIN = 180; // ADC最小値 (10bit基準)
-static constexpr uint16_t ACCEL_MAX = 890; // ADC最大値 (10bit基準)
+inline constexpr uint16_t ACCEL_MIN = 180; // ADC最小値 (10bit基準)
+inline constexpr uint16_t ACCEL_MAX = 890; // ADC最大値 (10bit基準)
 
-static constexpr uint32_t ACCEL_HID_MIN = 0;
-static constexpr uint32_t ACCEL_HID_MAX = 65535;
+inline constexpr uint32_t ACCEL_HID_MIN = 0;
+inline constexpr uint32_t ACCEL_HID_MAX = 65535;
 
-static constexpr uint16_t BRAKE_MIN = 100; // ADC最小値 (10bit基準)
-static constexpr uint16_t BRAKE_MAX = 820; // ADC最大値 (10bit基準)
+inline constexpr uint16_t BRAKE_MIN = 100; // ADC最小値 (10bit基準)
+inline constexpr uint16_t BRAKE_MAX = 820; // ADC最大値 (10bit基準)
 
-static constexpr uint32_t BRAKE_HID_MIN = 0;
-static constexpr uint32_t BRAKE_HID_MAX = 65535;
+inline constexpr uint32_t BRAKE_HID_MIN = 0;
+inline constexpr uint32_t BRAKE_HID_MAX = 65535;
 
-static constexpr uint8_t BUFFER_SIZE = 20;  // 移動平均バッファサイズ
-static constexpr uint8_t AVERAGE_COUNT = 8; // 移動平均サンプル数
+inline constexpr uint8_t BUFFER_SIZE = 20;  // 移動平均バッファサイズ
+inline constexpr uint8_t AVERAGE_COUNT = 8; // 移動平均サンプル数
 } // namespace Adc
 
 // ============================================================================
 // デジタル入力設定
 // ============================================================================
 namespace Input {
-static constexpr uint8_t BUTTON_DEBOUNCE_THRESHOLD = 4; // 連続一致サンプル数
+inline constexpr uint8_t BUTTON_DEBOUNCE_THRESHOLD = 4; // 連続一致サンプル数
 }
 
 // ============================================================================
 // USB HID設定
 // ============================================================================
 namespace Hid {
-static constexpr uint8_t BUTTON_COUNT = 2; // ボタン数
-static constexpr uint8_t AXIS_COUNT = 3;   // 軸数
+inline constexpr uint8_t BUTTON_COUNT = 2; // ボタン数
+inline constexpr uint8_t AXIS_COUNT = 3;   // 軸数
 } // namespace Hid
 
 // ============================================================================
 // システム設定
 // ============================================================================
-static constexpr uint32_t SERIAL_BAUDRATE = 115200;
+inline constexpr uint32_t SERIAL_BAUDRATE = 115200;
 
 } // namespace Config
 

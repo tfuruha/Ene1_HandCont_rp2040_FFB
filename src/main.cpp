@@ -226,6 +226,12 @@ void loop1() {
           "[PHYS_INPUT] Steer:%d, Accel:%d, Brake:%d, Buttons:0x%04X\n",
           core1_input_report.steer, core1_input_report.accel,
           core1_input_report.brake, core1_input_report.buttons);
+      // 受信値（PIDエフェクト）のデバッグ出力を追加
+      Serial.printf(
+          "[PID_RECV] Mag:%d, Gain:%d, Type:0x%02X, Active:%s, Test:%s\n",
+          core1_effects[0].magnitude, core1_effects[0].gain,
+          core1_effects[0].type, core1_effects[0].active ? "ON" : "OFF",
+          core1_effects[0].isCallBackTest ? "YES" : "NO");
     }
 #endif
   }
