@@ -11,6 +11,7 @@
 
 #include <Arduino.h>
 #include <CANInterface.h>
+#include <Config.h>
 
 class MF4015_Driver {
 public:
@@ -72,12 +73,25 @@ public:
 
   const Status &getStatus() const { return status; }
 
+  /**
+   * @brief エンコーダ値が更新されたか確認し、フラグをクリアする
+   * @return true: 更新されていた, false: 更新されていない
+   */
+  bool checkEncoderUpdated() {
+    if (encoderUpdated) {
+      encoderUpdated = false;
+      return true;
+    }
+    return false;
+  }
+
 private:
   CANInterface *can; ///< 外部から注入されたCANインターフェース
   uint32_t canId;    ///< ターゲットモーターのID
   Status status;     ///< 現在のステータス情報
 
   // コマンド定数 (内部用)
+  // @note コマンドに対応するプロトコルはMotorDriveProtocol.mdを参照
   static constexpr uint8_t CMD_MOTOR_OFF = 0x80;
   static constexpr uint8_t CMD_MOTOR_ON = 0x88;
   static constexpr uint8_t CMD_MOTOR_STOP = 0x81;
@@ -86,9 +100,20 @@ private:
   static constexpr uint8_t CMD_READ_STAT1 = 0x9A;
   static constexpr uint8_t CMD_CLEAR_ERR = 0x9B;
 
+  bool isTorqueLimited;         ///< トルク制限状態フラグ
+  volatile bool encoderUpdated; ///< エンコーダ値更新フラグ
+
   // デフォルト設定値
   static constexpr uint32_t DEFAULT_CAN_ID = 0x141;
   static constexpr int16_t DEFAULT_TORQUE_LIMIT = 2048;
+
+  /**
+   * @brief ヒステリシス幅 (エンコーダカウント単位)
+   * 動作範囲の約5%程度を目安に設定
+   */
+  static constexpr int32_t HYSTERESIS_WIDTH =
+      (int32_t)((float)(Config::Steer::ANGLE_MAX - Config::Steer::ANGLE_MIN) *
+                0.05);
 
   void sendCommand(uint8_t cmd, const uint8_t *data = nullptr, uint8_t len = 0);
 };

@@ -160,38 +160,47 @@ void loop1() {
     }
   }
 
-  // 2. 厳密な 1ms 周期制御 (累積誤差の排除)
+  // 2. 厳密な 500us 周期制御
   uint32_t now_us = micros();
-  if (stearContTrigger.hasExpired()) {
+  static uint32_t lastRequestMicros = 0;
+  static bool waitingForEncoder = false;
 
-    // --- 周期処理開始 ---
+  if (stearContTrigger.hasExpired()) {
+    // A. 周期の冒頭で「最新角度」を要求
+    mfMotor.requestEncoder();
+    lastRequestMicros = now_us;
+    waitingForEncoder = true;
+  }
+
+  // B.
+  // エンコーダ値が更新された、またはタイムアウト（フェイルセーフ）時に制御を実行
+  // タイムアウトは制御周期の半分程度 (250us) に設定
+  bool timeout = waitingForEncoder && (now_us - lastRequestMicros > 500);
+
+  if (mfMotor.checkEncoderUpdated() || timeout) {
+    waitingForEncoder = false;
+
+    // --- 同期制御処理開始 ---
     sharedData.lastCore1Micros = now_us;
     sharedData.core1LoopCount++;
 
-    // 1. 共有メモリから FFB 命令を取得 (ID: 0x01/0x05/0x0A/0x0D 等のパース後)
-    // 今回は単純な 1ms サイクル管理のため、物理入力送信と一括して行う
-    // (詳細な FFB 命令が必要な場合は core1_effects を参照)
+    // 1. 共有メモリから FFB 命令を取得
     ffb_core1_update_shared(&core1_input_report, core1_effects);
 
-    // A. ドライバから読み取ったステータスを格納
-    // ステアリング角度をセンターオフセット適用および範囲制限して取得
+    // 2.
+    // 最新のステアリング角度を取得（parseFrameによって更新済み、またはタイムアウト時の前回値）
     core1_input_report.steer = mfMotor.getSteerValue();
 
-    // B. 他のIO（ペダル等）の読み取り
+    // 3. 他のIO（ペダル等）の読み取り
     if (sampleTrigger.hasExpired()) {
-      // ADCサンプリング
       adBrake.getadc();
       adAccel.getadc();
-
-      // ボタン状態更新
       diKeyUp.update();
       diKeyDown.update();
 
-      // 物理入力の更新
       core1_input_report.accel = (int16_t)adAccel.getvalue();
       core1_input_report.brake = (int16_t)adBrake.getvalue();
 
-      // ボタンビットマスク構築
       uint16_t btnMask = 0;
       if (diKeyUp.getState() == LOW)
         btnMask |= (1 << 0);
@@ -200,20 +209,19 @@ void loop1() {
       core1_input_report.buttons = btnMask;
     }
 
-    // C. FFB 情報を元にモーターに送信
-    // 簡易的に Constant Force だけ反映
+    // 4. トルク演算と出力
     int16_t torque = core1_effects[0].magnitude;
-    // ※実際には sharedData.targetTorque や gain を加味した演算が必要だが
-    // ここでは移植ロジックの統合に集中するため直結する
     sharedData.targetTorque = torque;
+
+    // センタリングのテスト (バネ力)
+    float k = -0.06f * ((float)Config::Steer::TORQUE_MAX /
+                        (float)Config::Steer::ANGLE_MAX);
+    torque = (int16_t)(k * (float)(core1_input_report.steer));
+
     mfMotor.setTorque(torque);
 
-    // 2. 更新した物理入力を共有メモリへ戻す
-    // (ffb_core1_update_shared は dual-way 同期なので、次のサイクルの
-    // hasExpired 内で実行)
-
 #ifdef PHYSICAL_INPUT_DEBUG_ENABLE
-    // 3. デバッグ出力 (1秒周期)
+    // 5. デバッグ出力 (1秒周期)
     static IntervalTrigger_m debugTrigger(1000);
     static bool debugInit = false;
     if (!debugInit) {
@@ -223,15 +231,15 @@ void loop1() {
 
     if (debugTrigger.hasExpired()) {
       Serial.printf(
-          "[PHYS_INPUT] Steer:%d, Accel:%d, Brake:%d, Buttons:0x%04X\n",
+          "[PHYS_INPUT] Steer:%d, Accel:%d, Brake:%d, Buttons:0x%04X, TO:%s\n",
           core1_input_report.steer, core1_input_report.accel,
-          core1_input_report.brake, core1_input_report.buttons);
-      // 受信値（PIDエフェクト）のデバッグ出力を追加
-      Serial.printf(
-          "[PID_RECV] Mag:%d, Gain:%d, Type:0x%02X, Active:%s, Test:%s\n",
-          core1_effects[0].magnitude, core1_effects[0].gain,
-          core1_effects[0].type, core1_effects[0].active ? "ON" : "OFF",
-          core1_effects[0].isCallBackTest ? "YES" : "NO");
+          core1_input_report.brake, core1_input_report.buttons,
+          timeout ? "YES" : "NO");
+      // Serial.printf(
+      //     "[PID_RECV] Mag:%d, Gain:%d, Type:0x%02X, Active:%s, Test:%s\n",
+      //     core1_effects[0].magnitude, core1_effects[0].gain,
+      //     core1_effects[0].type, core1_effects[0].active ? "ON" : "OFF",
+      //     core1_effects[0].isCallBackTest ? "YES" : "NO");
     }
 #endif
   }
