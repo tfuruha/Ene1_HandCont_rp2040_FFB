@@ -10,6 +10,7 @@
 #include "MF4015_Driver.h"
 #include "config.h"
 #include "config_manager.h"
+#include "control.h"
 #include "shared_data.h"
 #include "util.h"
 #include <Adafruit_TinyUSB.h>
@@ -36,12 +37,19 @@ extern CANInterface *canBus;
 // --- 周期管理 ---
 static IntervalTrigger_m hidReportTrigger(Config::Time::HIDREPO_INTERVAL_MS);
 static IntervalTrigger_u stearContTrigger(Config::Time::STEAR_CONT_INTERVAL_US);
-static IntervalTrigger_m sampleTrigger(Config::Time::SAMPLING_INTERVAL_MS);
+static IntervalTrigger_u sampleTrigger(Config::Time::SAMPLING_INTERVAL_US);
 
 // --- Core間通信用 (hidwffb.h に実体があるが main.cpp でも管理が必要なフラグ等)
 // ---
 static custom_gamepad_report_t core1_input_report = {0};
 static FFB_Shared_State_t core1_effects[MAX_EFFECTS];
+
+// --- 物理エフェクト (Core 1 で使用) ---
+static PhysicalEffect steerEffect(Config::Steer::FRICTION_COEFF,
+                                  Config::Steer::SPRING_COEFF,
+                                  Config::Steer::DAMPER_COEFF,
+                                  Config::Steer::INERTIA_COEFF,
+                                  Config::Time::STEAR_CONT_INTERVAL_US);
 
 void setup() {
   // Serial.begin(Config::SERIAL_BAUDRATE);
@@ -51,8 +59,8 @@ void setup() {
     ConfigManager::loadConfig();
   }
 
-  // HIDモジュールの初期化 (1msポーリング)
-  hidwffb_begin(1);
+  // HIDモジュールの初期化
+  hidwffb_begin(Config::Time::USB_POLL_INTERVAL_MS);
 
   // 共有メモリ・ミューテックスの初期化
   ffb_shared_memory_init();
@@ -70,12 +78,10 @@ void setup() {
 void loop() {
   // 1. HIDレポート送信 (HIDREPO_INTERVAL_MS ms周期)
   if (hidReportTrigger.hasExpired()) {
-    if (hidwffb_ready()) {
+    if (hidwffb_ready()) { // HID送信バッファが空いている場合
       custom_gamepad_report_t report = {0};
-      // 共有メモリから入力を取得
-      ffb_core0_get_input_report(&report);
-      // HID送信
-      hidwffb_send_report(&report);
+      ffb_core0_get_input_report(&report); // 共有メモリから入力を取得
+      hidwffb_send_report(&report);        // HID送信
     }
   }
 
@@ -149,98 +155,75 @@ void setup1() {
  * 非ブロッキングでCANバッファを監視しつつ、高精度な周期実行を行う。
  */
 void loop1() {
-  // 1. CAN受信バッファの常時監視 (周期に関わらず可能な限り頻繁に実行)
+  // 1. INT検出トリガ (MCP2515 受信完了イベント)
+  //    setTorque()の応答でMF4015から角位置付きデータが返ってくる
   if (canWrapper.available()) {
     uint32_t id;
     uint8_t len;
     uint8_t data[8];
     if (canWrapper.readFrame(id, len, data)) {
-      // モータードライバにパケットを渡してステータス更新
+      // パース（角位置含むステータス更新）
       mfMotor.parseFrame(id, len, data);
     }
-  }
 
-  // 2. 厳密な 500us 周期制御
-  uint32_t now_us = micros();
-  static uint32_t lastRequestMicros = 0;
-  static bool waitingForEncoder = false;
-
-  if (stearContTrigger.hasExpired()) {
-    // A. 周期の冒頭で「最新角度」を要求
-    mfMotor.requestEncoder();
-    lastRequestMicros = now_us;
-    waitingForEncoder = true;
-  }
-
-  // B.
-  // エンコーダ値が更新された、またはタイムアウト（フェイルセーフ）時に制御を実行
-  // タイムアウトは制御周期の半分程度 (250us) に設定
-  bool timeout = waitingForEncoder && (now_us - lastRequestMicros > 500);
-
-  if (mfMotor.checkEncoderUpdated() || timeout) {
-    waitingForEncoder = false;
-
-    // --- 同期制御処理開始 ---
-    sharedData.lastCore1Micros = now_us;
-    sharedData.core1LoopCount++;
-
-    // 1. 共有メモリから FFB 命令を取得
-    ffb_core1_update_shared(&core1_input_report, core1_effects);
-
-    // 2.
-    // 最新のステアリング角度を取得（parseFrameによって更新済み、またはタイムアウト時の前回値）
+    // 角位置取得（parseFrameで更新済み）
     core1_input_report.steer = mfMotor.getSteerValue();
 
-    // 3. 他のIO（ペダル等）の読み取り
-    if (sampleTrigger.hasExpired()) {
-      adBrake.getadc();
-      adAccel.getadc();
-      diKeyUp.update();
-      diKeyDown.update();
+    // AD変換値・スイッチ入力の最新値（フィルタ処理済み）を取得
+    core1_input_report.accel = (int16_t)adAccel.getvalue();
+    core1_input_report.brake = (int16_t)adBrake.getvalue();
 
-      core1_input_report.accel = (int16_t)adAccel.getvalue();
-      core1_input_report.brake = (int16_t)adBrake.getvalue();
+    uint16_t btnMask = 0;
+    if (diKeyUp.getState() == LOW)
+      btnMask |= (1 << 0);
+    if (diKeyDown.getState() == LOW)
+      btnMask |= (1 << 1);
+    core1_input_report.buttons = btnMask;
 
-      uint16_t btnMask = 0;
-      if (diKeyUp.getState() == LOW)
-        btnMask |= (1 << 0);
-      if (diKeyDown.getState() == LOW)
-        btnMask |= (1 << 1);
-      core1_input_report.buttons = btnMask;
-    }
+    // トルク補正用の物理量計算
+    steerEffect.update(core1_input_report.steer);
+  }
 
-    // 4. トルク演算と出力
+  // 2. ステアリング制御タイマートリガ (1000us周期)
+  //    トルク指令送信 → CAN送信 → MF4015が応答 → INT発生
+  if (stearContTrigger.hasExpired()) {
+    sharedData.lastCore1Micros = micros();
+    sharedData.core1LoopCount++;
+
+    // 共有メモリから FFB 命令を取得し、入力レポートをCore0へ渡す
+    ffb_core1_update_shared(&core1_input_report, core1_effects);
+
+    // トルク演算と送信
     int16_t torque = core1_effects[0].magnitude;
     sharedData.targetTorque = torque;
-
-    // センタリングのテスト (バネ力)
-    float k = -0.06f * ((float)Config::Steer::TORQUE_MAX /
-                        (float)Config::Steer::ANGLE_MAX);
-    torque = (int16_t)(k * (float)(core1_input_report.steer));
-
+    torque = steerEffect.getEffect();
     mfMotor.setTorque(torque);
+  }
+
+  // 3. ADC/DI サンプリング (250us周期)
+  //    生値の取得のみ行い、物理量変換はINT検出時に実行する
+  if (sampleTrigger.hasExpired()) {
+    adBrake.getadc();
+    adAccel.getadc();
+    diKeyUp.update();
+    diKeyDown.update();
+  }
 
 #ifdef PHYSICAL_INPUT_DEBUG_ENABLE
-    // 5. デバッグ出力 (1秒周期)
-    static IntervalTrigger_m debugTrigger(1000);
-    static bool debugInit = false;
-    if (!debugInit) {
-      debugTrigger.init();
-      debugInit = true;
-    }
-
-    if (debugTrigger.hasExpired()) {
-      Serial.printf(
-          "[PHYS_INPUT] Steer:%d, Accel:%d, Brake:%d, Buttons:0x%04X, TO:%s\n",
-          core1_input_report.steer, core1_input_report.accel,
-          core1_input_report.brake, core1_input_report.buttons,
-          timeout ? "YES" : "NO");
-      // Serial.printf(
-      //     "[PID_RECV] Mag:%d, Gain:%d, Type:0x%02X, Active:%s, Test:%s\n",
-      //     core1_effects[0].magnitude, core1_effects[0].gain,
-      //     core1_effects[0].type, core1_effects[0].active ? "ON" : "OFF",
-      //     core1_effects[0].isCallBackTest ? "YES" : "NO");
-    }
-#endif
+  // 4. デバッグ出力 (1秒周期)
+  static IntervalTrigger_m debugTrigger(1000);
+  static bool debugInit = false;
+  if (!debugInit) {
+    debugTrigger.init();
+    debugInit = true;
   }
+
+  if (debugTrigger.hasExpired()) {
+    Serial.printf("[PHYS_INPUT] Steer:%d, Accel:%d, Brake:%d, Buttons:0x%04X\n",
+                  core1_input_report.steer, core1_input_report.accel,
+                  core1_input_report.brake, core1_input_report.buttons);
+    //  Serial.printf("[RAW_ADC] Accel:%d, Brake:%d\n", adAccel.getRawLatest(),
+    //                adBrake.getRawLatest());
+  }
+#endif
 }

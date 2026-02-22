@@ -40,17 +40,27 @@ inline constexpr uint16_t ANGLE_CENTER = 0x7FFF; // センター位置
 
 inline constexpr int16_t TORQUE_MIN = -2048; // トルク電流指令値 最小
 inline constexpr int16_t TORQUE_MAX = 2048;  // トルク電流指令値 最大
+
+// PhysicalEffect パラメータ（初期テスト用）
+inline constexpr float SPRING_COEFF = 0.05f * TORQUE_MAX / ANGLE_MAX;
+// バネ係数
+inline constexpr float FRICTION_COEFF = 0.0f;  // 摩擦係数（現状無効）
+inline constexpr float DAMPER_COEFF = 0.0005f; // ダンパー係数（現状無効）
+inline constexpr float INERTIA_COEFF = 0.0f;   // 慣性係数（現状無効）
 } // namespace Steer
 
 // ============================================================================
 // タイミング設定
 // ============================================================================
 namespace Time {
-inline constexpr uint32_t SAMPLING_INTERVAL_MS =
-    1; // ADC/DI サンプリング周期 (ms)
-inline constexpr uint32_t HIDREPO_INTERVAL_MS = 2; // HIDレポート送信周期 (ms)
-inline constexpr uint32_t STEAR_CONT_INTERVAL_US =
-    1000; // ステアリング制御インターバル(us)
+// ADC/DI サンプリング周期 (us)
+inline constexpr uint32_t SAMPLING_INTERVAL_US = 250;
+// ステアリング制御インターバル(us)
+inline constexpr uint32_t STEAR_CONT_INTERVAL_US = 1000;
+// HIDレポート送信周期 (ms) デバイス側の送信間隔(最大値)
+inline constexpr uint32_t HIDREPO_INTERVAL_MS = 1;
+// USB HID ポーリング周期 (ms) ホスト側のポーリング間隔(最大値)
+inline constexpr uint32_t USB_POLL_INTERVAL_MS = 5;
 } // namespace Time
 
 // ============================================================================
@@ -69,7 +79,7 @@ inline constexpr uint16_t BRAKE_MAX = 820; // ADC最大値 (10bit基準)
 inline constexpr uint32_t BRAKE_HID_MIN = 0;
 inline constexpr uint32_t BRAKE_HID_MAX = 65535;
 
-inline constexpr uint8_t BUFFER_SIZE = 20;  // 移動平均バッファサイズ
+inline constexpr uint8_t BUFFER_SIZE = 12;  // 移動平均バッファサイズ
 inline constexpr uint8_t AVERAGE_COUNT = 8; // 移動平均サンプル数
 } // namespace Adc
 

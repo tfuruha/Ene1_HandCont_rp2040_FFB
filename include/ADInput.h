@@ -42,6 +42,12 @@ public:
    */
   int getvalue();
 
+  /**
+   * @brief バッファ内の最新のAD変換生値を返す（デバッグ用）
+   * @return 最後にgetadc()で取得した生のAD変換値。サンプルなしの場合は0。
+   */
+  int getRawLatest() const;
+
 private:
   uint8_t _pin;
   uint16_t _bufferSize;

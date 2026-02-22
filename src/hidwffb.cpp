@@ -37,14 +37,15 @@ static uint8_t const desc_hid_report[] = {
     0x75, 0x10,                   //   Report Size (16)
     0x95, 0x01,                   //   Report Count (1)
     0x81, 0x02,                   //   Input (Data, Variable, Absolute)
-    0x05, 0x09,                   //   Usage Page (Button)
-    0x19, 0x01,                   //   Usage Minimum (1)
-    0x29, 0x10,                   //   Usage Maximum (16)
-    0x15, 0x00,                   //   Logical Minimum (0)
-    0x25, 0x01,                   //   Logical Maximum (1)
-    0x75, 0x01,                   //   Report Size (1)
-    0x95, 0x10,                   //   Report Count (16)
-    0x81, 0x02,                   //   Input (Data, Variable, Absolute)
+    // ボタン16点
+    0x05, 0x09, //   Usage Page (Button)
+    0x19, 0x01, //   Usage Minimum (1)
+    0x29, 0x10, //   Usage Maximum (16)
+    0x15, 0x00, //   Logical Minimum (0)
+    0x25, 0x01, //   Logical Maximum (1)
+    0x75, 0x01, //   Report Size (1)
+    0x95, 0x10, //   Report Count (16)
+    0x81, 0x02, //   Input (Data, Variable, Absolute)
 
     // --- Output Reports: FFB/PID制御 (同一コレクション内) ---
     // Set Effect (ID: 1)
@@ -343,7 +344,15 @@ void hidwffb_loopback_test_sync(custom_gamepad_report_t *new_input,
   }
 }
 
-// --- Core 0 側: パース結果を書き込み、HID送信用の入力を読み出す ---
+/**
+ * @brief Core 0 側: 共有メモリから HID 送信用の入力レポートを読み出す
+ *
+ * Core 1
+ * 側で取得された物理入力（またはテスト用の捏造入力）を共有メモリから読み出し、
+ * Core 0 での USB HID 送信に使用します。
+ *
+ * @param[out] dest 取得した入力レポートを格納する構造体へのポインタ
+ */
 void ffb_core0_get_input_report(custom_gamepad_report_t *dest) {
   if (mutex_enter_timeout_ms(&ffb_shared_mutex, 1)) {
     *dest = shared_input_report;

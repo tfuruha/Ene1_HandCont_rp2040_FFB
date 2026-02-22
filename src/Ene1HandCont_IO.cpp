@@ -27,28 +27,24 @@ DigitalInputChannel diKeyDown(Config::Pin::SHIFT_DOWN,
 
 // 変換関数：ブレーキ用（範囲変換と反転処理）
 int transformBrake(int val) {
-  // config.h の BRAKE_ADC_MIN/MAX 範囲を -32767..32767 に変換
-  // BRAKE_INVERT が true の場合は反転（踏み込みで値が増えるように）
-  // return val; // for debug
+  // map()は入力範囲外の値を外挿するため、先にADC範囲にクランプする
+  val = constrain(val, Config::Adc::BRAKE_MIN, Config::Adc::BRAKE_MAX);
 #ifdef BRAKE_INVERT
-  int mapped = map(val, Config::Adc::BRAKE_MIN, Config::Adc::BRAKE_MAX,
-                   Config::Adc::BRAKE_HID_MAX, Config::Adc::BRAKE_HID_MIN);
+  // BRAKE_INVERT: 踏み込みで値が増えるように反転
+  return map(val, Config::Adc::BRAKE_MIN, Config::Adc::BRAKE_MAX,
+             Config::Adc::BRAKE_HID_MAX, Config::Adc::BRAKE_HID_MIN);
 #else
-  int mapped = map(val, Config::Adc::BRAKE_MIN, Config::Adc::BRAKE_MAX,
-                   Config::Adc::BRAKE_HID_MIN, Config::Adc::BRAKE_HID_MAX);
+  return map(val, Config::Adc::BRAKE_MIN, Config::Adc::BRAKE_MAX,
+             Config::Adc::BRAKE_HID_MIN, Config::Adc::BRAKE_HID_MAX);
 #endif // BRAKE_INVERT
-  return constrain(mapped, Config::Adc::BRAKE_HID_MIN,
-                   Config::Adc::BRAKE_HID_MAX);
 }
 
 // 変換関数：アクセル用（範囲変換）
 int transformAccel(int val) {
-  // config.h の ACCEL_ADC_MIN/MAX 範囲を -32767..32767 に変換
-  // return val; // for debug
-  int mapped = map(val, Config::Adc::ACCEL_MIN, Config::Adc::ACCEL_MAX,
-                   Config::Adc::ACCEL_HID_MIN, Config::Adc::ACCEL_HID_MAX);
-  return constrain(mapped, Config::Adc::ACCEL_HID_MIN,
-                   Config::Adc::ACCEL_HID_MAX);
+  // map()は入力範囲外の値を外挿するため、先にADC範囲にクランプする
+  val = constrain(val, Config::Adc::ACCEL_MIN, Config::Adc::ACCEL_MAX);
+  return map(val, Config::Adc::ACCEL_MIN, Config::Adc::ACCEL_MAX,
+             Config::Adc::ACCEL_HID_MIN, Config::Adc::ACCEL_HID_MAX);
 }
 
 // AD入力チャンネルインスタンス

@@ -138,6 +138,10 @@ bool hidwffb_get_pid_debug_info(pid_debug_info_t *info);
 
 void ffb_shared_memory_init(); // Core間通信用構造体の初期化
 void ffb_core0_update_shared(pid_debug_info_t *info);
+/**
+ * @brief Core 0 側: 共有メモリから HID 送信用の入力レポートを読み出す
+ * @param[out] dest 入力レポートの格納先ポインタ
+ */
 void ffb_core0_get_input_report(custom_gamepad_report_t *dest);
 void ffb_core1_update_shared(custom_gamepad_report_t *new_input,
                              FFB_Shared_State_t *local_effects_dest);

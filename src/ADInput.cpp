@@ -64,3 +64,11 @@ int ADInputChannel::getvalue() {
 
   return average;
 }
+
+int ADInputChannel::getRawLatest() const {
+  if (!_buffer || _sampleCount == 0)
+    return 0;
+  // _head は次に書き込む位置なので、最新値はその一つ前
+  uint16_t latestIdx = (_head == 0) ? (_bufferSize - 1) : (_head - 1);
+  return _buffer[latestIdx];
+}
