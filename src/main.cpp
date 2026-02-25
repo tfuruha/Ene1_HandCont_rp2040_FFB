@@ -196,7 +196,7 @@ void loop1() {
     // トルク演算と送信
     int16_t torque = core1_effects[0].magnitude;
     sharedData.targetTorque = torque;
-    torque = steerEffect.getEffect();
+    torque = steerEffect.getEffect(); // テスト用に物理エフェクトのみ
     mfMotor.setTorque(torque);
   }
 

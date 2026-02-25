@@ -34,15 +34,25 @@ namespace Steer {
 inline constexpr uint32_t CAN_ID = 0x141; // MF4015のCAN ID
 inline constexpr uint8_t DEVICE_ID = 1;   // MF4015デバイスID
 
-inline constexpr int32_t ANGLE_MIN = -5461; // 有効角度範囲 最小値 (-30度相当)
-inline constexpr int32_t ANGLE_MAX = 5461;  // 有効角度範囲 最大値 (+30度相当)
+// エンコーダ分解能: 16bit(65536カウント) / 360度
+inline constexpr double ENCODER_COUNTS_PER_DEG = 65536.0 / 360.0;
+
+// 有効角度範囲 (0を中心とした片側角度, 単位: deg)
+inline constexpr double ANGLE_RANGE_DEG = 45.0;
+
+// 有効角度範囲 (エンコーダカウント値, constexpr算出)
+inline constexpr int32_t ANGLE_MIN =
+    -(int32_t)(ANGLE_RANGE_DEG * ENCODER_COUNTS_PER_DEG);
+inline constexpr int32_t ANGLE_MAX =
+    (int32_t)(ANGLE_RANGE_DEG * ENCODER_COUNTS_PER_DEG);
 inline constexpr uint16_t ANGLE_CENTER = 0x7FFF; // センター位置
 
 inline constexpr int16_t TORQUE_MIN = -2048; // トルク電流指令値 最小
 inline constexpr int16_t TORQUE_MAX = 2048;  // トルク電流指令値 最大
 
 // PhysicalEffect パラメータ（初期テスト用）
-inline constexpr float SPRING_COEFF = 0.05f * TORQUE_MAX / ANGLE_MAX;
+inline constexpr float SPRING_COEFF =
+    0.05f * (float)TORQUE_MAX / (float)ANGLE_MAX;
 // バネ係数
 inline constexpr float FRICTION_COEFF = 0.0f;  // 摩擦係数（現状無効）
 inline constexpr float DAMPER_COEFF = 0.0005f; // ダンパー係数（現状無効）
