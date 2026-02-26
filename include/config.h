@@ -55,7 +55,7 @@ inline constexpr float SPRING_COEFF =
     0.05f * (float)TORQUE_MAX / (float)ANGLE_MAX;
 // バネ係数
 inline constexpr float FRICTION_COEFF = 0.0f;  // 摩擦係数（現状無効）
-inline constexpr float DAMPER_COEFF = 0.0005f; // ダンパー係数（現状無効）
+inline constexpr float DAMPER_COEFF = 0.0002f; // ダンパー係数（現状無効）
 inline constexpr float INERTIA_COEFF = 0.0f;   // 慣性係数（現状無効）
 } // namespace Steer
 
