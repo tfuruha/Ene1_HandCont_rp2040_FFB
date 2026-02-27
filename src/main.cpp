@@ -34,6 +34,9 @@ MF4015_Driver mfMotor(&canWrapper, Config::Steer::CAN_ID);
 // mf4015.cpp (旧コードとの互換用) で使用する extern ポインタも一応紐付けておく
 extern CANInterface *canBus;
 
+// hidwffb.cpp で管理されているグローバルゲイン (Device Gain Report 0x0D で更新)
+extern volatile uint8_t shared_global_gain;
+
 // --- 周期管理 ---
 static IntervalTrigger_m hidReportTrigger(Config::Time::HIDREPO_INTERVAL_MS);
 static IntervalTrigger_u stearContTrigger(Config::Time::STEAR_CONT_INTERVAL_US);
@@ -91,6 +94,35 @@ void loop() {
     // 解析結果（Gain, Magnitude等）を共有メモリへ
     ffb_core0_update_shared(&pid_info);
   }
+}
+
+// ============================================================================
+// Core 1 ユーティリティ関数
+// ============================================================================
+
+/**
+ * @brief PID magnitude をモータートルク指令値にスケーリングする
+ *
+ * DirectInput PID の慣習値 ±10000 を TORQUE_MIN～TORQUE_MAX にマップし、
+ * deviceGain (0..255, 255=100%) を全体ゲインとして乗算する。
+ *
+ * @param magnitude  PIDから受け取った生値 (DirectInput慣習: ±10000)
+ * @param deviceGain グローバルゲイン (0..255)
+ * @return           モーター指令値 (TORQUE_MIN..TORQUE_MAX)
+ */
+static int16_t scaleMagnitudeToTorque(int16_t magnitude, uint8_t deviceGain) {
+  static constexpr int32_t MAG_MAX = 10000; // DirectInput 慣習値
+  // ±MAG_MAX にクランプ
+  int32_t clamped = (int32_t)magnitude;
+  if (clamped > MAG_MAX)
+    clamped = MAG_MAX;
+  if (clamped < -MAG_MAX)
+    clamped = -MAG_MAX;
+  // deviceGain 適用 (0..255 → 0..1.0 相当) ＆ TORQUE_MAX へスケーリング
+  // 整数2段除算による桁落ちを防ぐためfloatで演算し、四捨五入してからint16_tに変換
+  float gained = (float)clamped * (float)deviceGain / 255.0f;
+  return (int16_t)(gained * (float)Config::Steer::TORQUE_MAX / (float)MAG_MAX +
+                   0.5f);
 }
 
 // ============================================================================
@@ -194,9 +226,12 @@ void loop1() {
     ffb_core1_update_shared(&core1_input_report, core1_effects);
 
     // トルク演算と送信
-    int16_t torque = core1_effects[0].magnitude;
+    // PID magnitude (DirectInput ±10000) を TORQUE_MIN～TORQUE_MAX
+    // にスケーリング
+    int16_t torque =
+        scaleMagnitudeToTorque(core1_effects[0].magnitude, shared_global_gain);
     sharedData.targetTorque = torque;
-    torque += steerEffect.getEffect(); // テスト用に物理エフェクトのみ
+    // torque += steerEffect.getEffect(); // テスト用に物理エフェクトのみ
     mfMotor.setTorque(torque);
   }
 
@@ -222,6 +257,8 @@ void loop1() {
     Serial.printf("[PHYS_INPUT] Steer:%d, Accel:%d, Brake:%d, Buttons:0x%04X\n",
                   core1_input_report.steer, core1_input_report.accel,
                   core1_input_report.brake, core1_input_report.buttons);
+    Serial.printf("[PID] effects[0].magnitude:%d\n",
+                  core1_effects[0].magnitude);
     //  Serial.printf("[RAW_ADC] Accel:%d, Brake:%d\n", adAccel.getRawLatest(),
     //                adBrake.getRawLatest());
   }

@@ -46,9 +46,12 @@ inline constexpr int32_t ANGLE_MIN =
 inline constexpr int32_t ANGLE_MAX =
     (int32_t)(ANGLE_RANGE_DEG * ENCODER_COUNTS_PER_DEG);
 inline constexpr uint16_t ANGLE_CENTER = 0x7FFF; // センター位置
-
-inline constexpr int16_t TORQUE_MIN = -2048; // トルク電流指令値 最小
-inline constexpr int16_t TORQUE_MAX = 2048;  // トルク電流指令値 最大
+// トルク電流指令 original
+//  inline constexpr int16_t TORQUE_MIN = -2048; // トルク電流指令値 最小
+//  inline constexpr int16_t TORQUE_MAX = 2048;  // トルク電流指令値 最大
+// トルク電流指令 modified
+inline constexpr int16_t TORQUE_MIN = -1000; // トルク電流指令値 最小
+inline constexpr int16_t TORQUE_MAX = 1000;  // トルク電流指令値 最大
 
 // PhysicalEffect パラメータ（初期テスト用）
 inline constexpr float SPRING_COEFF =
