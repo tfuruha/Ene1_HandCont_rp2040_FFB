@@ -1,135 +1,180 @@
 /**
  * @file hidwffb.cpp
- * @brief HIDゲームコントローラおよびFFB制御モジュールの実装
+ * @brief HID Joystick + FFB制御モジュール実装 (USB PID仕様準拠)
  */
 
 #include "hidwffb.h"
+#include "hid_pid_descriptor.h" // HIDレポートディスクリプタ (USB PID仕様準拠)
 #include <stddef.h>
 #include <string.h>
 
-// --- HID レポート記述子 (Raw binary形式) ---
-// 16bit軸 x 3 (X: 符号付き, Z: 符号なし, Rz: 符号なし), Button x 16, FFB Output
-// Report x 64
-static uint8_t const desc_hid_report[] = {
-    0x05, 0x01, // Usage Page (Generic Desktop)
-    0x09, 0x05, // Usage (Gamepad)
-    0xA1, 0x01, // Collection (Application)
-    0x85, 0x01, //   Report ID (1)
-    0x05, 0x01, //   Usage Page (Generic Desktop)
-    // X軸: ハンドル (符号付き 16bit)
-    0x09, 0x30,       //   Usage (X)
-    0x16, 0x01, 0x80, //   Logical Minimum (-32767)
-    0x26, 0xFF, 0x7F, //   Logical Maximum (32767)
-    0x75, 0x10,       //   Report Size (16)
-    0x95, 0x01,       //   Report Count (1)
-    0x81, 0x02,       //   Input (Data, Variable, Absolute)
-    // Z軸: アクセル (符号なし 16bit)
-    0x09, 0x32,                   //   Usage (Z)
-    0x15, 0x00,                   //   Logical Minimum (0)
-    0x27, 0xFF, 0xFF, 0x00, 0x00, //   Logical Maximum (65535)
-    0x75, 0x10,                   //   Report Size (16)
-    0x95, 0x01,                   //   Report Count (1)
-    0x81, 0x02,                   //   Input (Data, Variable, Absolute)
-    // Rz軸: ブレーキ (符号なし 16bit)
-    0x09, 0x35,                   //   Usage (Rz)
-    0x15, 0x00,                   //   Logical Minimum (0)
-    0x27, 0xFF, 0xFF, 0x00, 0x00, //   Logical Maximum (65535)
-    0x75, 0x10,                   //   Report Size (16)
-    0x95, 0x01,                   //   Report Count (1)
-    0x81, 0x02,                   //   Input (Data, Variable, Absolute)
-    // ボタン16点
-    0x05, 0x09, //   Usage Page (Button)
-    0x19, 0x01, //   Usage Minimum (1)
-    0x29, 0x10, //   Usage Maximum (16)
-    0x15, 0x00, //   Logical Minimum (0)
-    0x25, 0x01, //   Logical Maximum (1)
-    0x75, 0x01, //   Report Size (1)
-    0x95, 0x10, //   Report Count (16)
-    0x81, 0x02, //   Input (Data, Variable, Absolute)
+// ============================================================================
+// モジュール内部状態
+//   ※ HIDレポートディスクリプタは hid_pid_descriptor.h を参照
+// ============================================================================
 
-    // --- Output Reports: FFB/PID制御 (同一コレクション内) ---
-    // Set Effect (ID: 1)
-    0x05, 0x01, //   Usage Page (Generic Desktop)
-    0x85, 0x01, //   Report ID (1)
-    0x09, 0x01, //   Usage (0x01)
-    0x75, 0x08, //   Report Size (8)
-    0x95, 0x0E, //   Report Count (14) - ID除くサイズ 14
-    0x91, 0x02, //   Output (Data, Variable, Absolute)
-
-    // Set Constant Force (ID: 5)
-    0x85, 0x05, //   Report ID (5)
-    0x09, 0x05, //   Usage (0x05)
-    0x95, 0x03, //   Report Count (3) - ID除くサイズ 3
-    0x91, 0x02, //   Output (Data, Variable, Absolute)
-
-    // Device Gain (ID: 13)
-    0x85, 0x0D, //   Report ID (13)
-    0x09, 0x0D, //   Usage (0x0D)
-    0x95, 0x01, //   Report Count (1) - ID除くサイズ 1
-    0x91, 0x02, //   Output (Data, Variable, Absolute)
-
-    // Effect Operation (ID: 10/0x0A)
-    0x85, 0x0A, //   Report ID (10)
-    0x09, 0x0A, //   Usage (0x0A)
-    0x95, 0x03, //   Report Count (3) - ID除くサイズ 3 (Index, Op, Loop)
-    0x91, 0x02, //   Output (Data, Variable, Absolute)
-
-    // 汎用 FFB データ用 (ID: 2)
-    0x06, 0x00, 0xFF, //   Usage Page (Vendor Defined 0xFF00)
-    0x85, 0x02,       //   Report ID (2)
-    0x09, 0x02,       //   Usage (0x02)
-    0x95, 0x40,       //   Report Count (64)
-    0x91, 0x02,       //   Output (Data, Variable, Absolute)
-
-    0xC0 // End Collection
-};
-
-// USB HID インスタンス
 static Adafruit_USBD_HID _usb_hid;
 
-// FFBデータ管理用
 static uint8_t _ffb_data[HID_FFB_REPORT_SIZE];
 static volatile bool _ffb_updated = false;
 
-// PIDパース状態保持用
 static pid_debug_info_t _pid_debug = {0, false, 0, 0, false};
-// Core 0 用のローカルデータ（パース結果の保持用）
 static FFB_Shared_State_t core0_ffb_effects[MAX_EFFECTS];
 static uint8_t core0_global_gain = 255;
+static uint8_t _next_block_index = 1; ///< 次に割り当てるスロット (1-based)
+static uint8_t _last_allocated_idx =
+    0; ///< 直前に割り当てたスロット (PID Block Load応答用)
+
+// ============================================================================
+// Feature Report レスポンス生成
+// ============================================================================
 
 /**
- * @brief HID受信コールバック (内部用)
- * PCから Output Report (FFB) が届いた際に呼び出される
+ * @brief Create New Effect GET Feature応答
+ *
+ * DirectInputは実装により SETまたは GETどちらでブロック生成を伝えるため、
+ * どちらで呼ばれてもブロックを割り当てる。
  */
-void _hid_report_callback(uint8_t report_id, hid_report_type_t report_type,
-                          uint8_t const *buffer, uint16_t bufsize) {
-  if (report_type == HID_REPORT_TYPE_OUTPUT) {
-    // buffer には report_id が含まれない場合がある（TinyUSBの仕様による）
-    // PID_ParseReport は buffer[0] が ID
-    // であることを期待しているため、一時的なバッファを作成
-    uint8_t temp_buf[HID_FFB_REPORT_SIZE];
-    temp_buf[0] = report_id;
-    uint16_t copy_size =
-        (bufsize < HID_FFB_REPORT_SIZE - 1) ? bufsize : HID_FFB_REPORT_SIZE - 1;
-    memcpy(&temp_buf[1], buffer, copy_size);
-
-    // PIDパースの実行
-    PID_ParseReport(temp_buf, copy_size + 1);
-
-    // 従来の汎用バッファ更新 (Report ID 1 または 2 を想定)
-    if (report_id == 1 || report_id == 2) {
-      memcpy(_ffb_data, temp_buf,
-             (copy_size + 1 < HID_FFB_REPORT_SIZE) ? copy_size + 1
-                                                   : HID_FFB_REPORT_SIZE);
-      _ffb_updated = true;
+static void _prepare_create_new_effect(uint8_t *buf, uint16_t *len) {
+  // GET Feature 0x05 でのブロック割当 (SET
+  // Featureで未割当の場合のフォールバック)
+  if (_last_allocated_idx == 0) {
+    if (_next_block_index <= MAX_EFFECTS) {
+      _last_allocated_idx = _next_block_index;
+      _next_block_index++;
     }
   }
+  USB_FFB_Feature_CreateNewEffect_t resp;
+  resp.reportId = HID_ID_CREATE_NEW_EFFECT;
+  resp.effectType = 0;
+  resp.byteCount = 0;
+  memcpy(buf, &resp, sizeof(resp));
+  *len = sizeof(resp);
 }
+
+/**
+ * @brief PID Block Load GET Feature応答
+ *        Create New Effectにより割り当てたスロット情報を返す。
+ *        読み出し後は _last_allocated_idx をリセットし、次回の割当に備える。
+ */
+static void _prepare_pid_block_load(uint8_t *buf, uint16_t *len) {
+  USB_FFB_Feature_PIDBlockLoad_t resp;
+  resp.reportId = HID_ID_PID_BLOCK_LOAD;
+  if (_last_allocated_idx > 0 && _last_allocated_idx <= MAX_EFFECTS) {
+    resp.effectBlockIndex = _last_allocated_idx;
+    resp.loadStatus = HID_BLOCK_LOAD_SUCCESS;
+    resp.ramPoolAvailable =
+        (uint16_t)(MAX_EFFECTS - (_next_block_index - 1)) * 10;
+  } else {
+    resp.effectBlockIndex = 0;
+    resp.loadStatus = HID_BLOCK_LOAD_FULL;
+    resp.ramPoolAvailable = 0;
+  }
+  // 読み出し後はリセット (次回 Create New Effect で新たに割り当てる)
+  _last_allocated_idx = 0;
+  memcpy(buf, &resp, sizeof(resp));
+  *len = sizeof(resp);
+}
+
+static void _prepare_pid_pool(uint8_t *buf, uint16_t *len) {
+  USB_FFB_Feature_PIDPool_t resp;
+  resp.reportId = HID_ID_PID_POOL;
+  resp.ramPoolSize = MAX_EFFECTS * 10;
+  resp.simultaneousEffects = MAX_EFFECTS;
+  resp.memoryManagement = 0; // Device managed = 0, shared params = 0
+  memcpy(buf, &resp, sizeof(resp));
+  *len = sizeof(resp);
+}
+
+// ============================================================================
+// Adafruit_USBD_HID コールバック (setReportCallback で登録)
+// ============================================================================
+
+/**
+ * @brief Feature Report Get コールバック
+ *        DirectInput がFFB初期化時に問い合わせる Feature Report に応答する
+ */
+static uint16_t _hid_get_report_cb(uint8_t report_id,
+                                   hid_report_type_t report_type,
+                                   uint8_t *buffer, uint16_t reqlen) {
+  (void)reqlen;
+  if (report_type != HID_REPORT_TYPE_FEATURE)
+    return 0;
+
+  uint16_t len = 0;
+  switch (report_id) {
+  case HID_ID_CREATE_NEW_EFFECT:
+    _prepare_create_new_effect(buffer, &len);
+    break;
+  case HID_ID_PID_BLOCK_LOAD:
+    _prepare_pid_block_load(buffer, &len);
+    break;
+  case HID_ID_PID_POOL:
+    _prepare_pid_pool(buffer, &len);
+    break;
+  default:
+    break;
+  }
+  return len;
+}
+
+/**
+ * @brief HID Output / Feature Report 受信コールバック (SET方向)
+ *
+ * DirectInput のFFBエフェクト作成シーケンス:
+ *   1. Host  →  Device: SET Feature 0x05 (Create New Effect)
+ *                         ↑ここでスロット割当し _last_allocated_idx に記録
+ *   2. Host  ←  Device: GET Feature 0x06 (PID Block Load)
+ *                         ↑_hid_get_report_cb が _last_allocated_idx を返す
+ *   3. Host  →  Device: Output 0x01 (Set Effect)
+ *   4. Host  →  Device: Output 0x05 (Set Constant Force etc.)
+ *   5. Host  →  Device: Output 0x0A (Effect Operation: Start)
+ */
+static void _hid_set_report_cb(uint8_t report_id, hid_report_type_t report_type,
+                               uint8_t const *buffer, uint16_t bufsize) {
+  // --- Feature SET: Create New Effect (0x05) ---
+  // Output 0x05 (Set Constant Force) と同一IDだが、report_typeで区別する
+  if (report_type == HID_REPORT_TYPE_FEATURE) {
+    if (report_id == HID_ID_CREATE_NEW_EFFECT) {
+      // SET Feature でのブロック割当
+      // 未割当の場合のみ割り当てる (GET側で割り当て済みの場合は上書きしない)
+      if (_last_allocated_idx == 0) {
+        if (_next_block_index <= MAX_EFFECTS) {
+          _last_allocated_idx = _next_block_index;
+          _next_block_index++;
+        }
+      }
+    }
+    // その他のFeature SETは無視 (PID Block LoadはGET専用)
+    return;
+  }
+
+  // --- Output SET: FFB コマンド ---
+  if (report_type != HID_REPORT_TYPE_OUTPUT)
+    return;
+
+  uint8_t temp_buf[HID_FFB_REPORT_SIZE];
+  temp_buf[0] = report_id;
+  uint16_t copy_size =
+      (bufsize < HID_FFB_REPORT_SIZE - 1) ? bufsize : HID_FFB_REPORT_SIZE - 1;
+  memcpy(&temp_buf[1], buffer, copy_size);
+
+  PID_ParseReport(temp_buf, copy_size + 1);
+
+  memcpy(_ffb_data, temp_buf,
+         (copy_size + 1 < HID_FFB_REPORT_SIZE) ? copy_size + 1
+                                               : HID_FFB_REPORT_SIZE);
+  _ffb_updated = true;
+}
+
+// ============================================================================
+// 公開 API
+// ============================================================================
 
 void hidwffb_begin(uint8_t poll_interval_ms) {
   _usb_hid.setPollInterval(poll_interval_ms);
   _usb_hid.setReportDescriptor(desc_hid_report, sizeof(desc_hid_report));
-  _usb_hid.setReportCallback(NULL, _hid_report_callback);
+  _usb_hid.setReportCallback(_hid_get_report_cb, _hid_set_report_cb);
   _usb_hid.begin();
 }
 
@@ -149,21 +194,33 @@ bool hidwffb_ready(void) {
 bool hidwffb_send_report(custom_gamepad_report_t *report) {
   if (!hidwffb_ready())
     return false;
-  return _usb_hid.sendReport(1, report, sizeof(custom_gamepad_report_t));
+  return _usb_hid.sendReport(HID_ID_GAMEPAD_INPUT, report,
+                             sizeof(custom_gamepad_report_t));
+}
+
+bool hidwffb_sends_pid_state(uint8_t effectBlockIdx, bool playing) {
+  if (!hidwffb_ready())
+    return false;
+  uint8_t status = (1 << 1); // Actuators Enabled
+  uint8_t effectState =
+      (uint8_t)(playing ? 1 : 0) | (uint8_t)((effectBlockIdx & 0x7F) << 1);
+  uint8_t payload[2] = {status, effectState};
+  return _usb_hid.sendReport(HID_ID_PID_STATE, payload, sizeof(payload));
 }
 
 bool hidwffb_get_ffb_data(uint8_t *buffer) {
   if (!_ffb_updated)
     return false;
-
-  // Core1等からの同時アクセスに備え、コピー中はフラグを下ろすか考慮が必要だが、
-  // ここでは単純なフラグ管理を行う
   memcpy(buffer, _ffb_data, HID_FFB_REPORT_SIZE);
   _ffb_updated = false;
   return true;
 }
 
 void hidwffb_clear_ffb_flag(void) { _ffb_updated = false; }
+
+// ============================================================================
+// PID レポートパーサ
+// ============================================================================
 
 void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
   if (buffer == NULL || bufsize == 0)
@@ -173,74 +230,116 @@ void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
   _pid_debug.lastReportId = reportId;
 
   switch (reportId) {
-  case 0x01: { // Set Effect Report
-    if (bufsize >= sizeof(USB_FFB_Report_SetEffect_t)) {
-      USB_FFB_Report_SetEffect_t *report = (USB_FFB_Report_SetEffect_t *)buffer;
-      // ET Constant Force (0x26) のチェック
-      uint8_t idx = report->effectBlockIndex - 1;
+  case HID_ID_SET_EFFECT: {
+    if (bufsize >= 1) {
+      USB_FFB_Report_SetEffect_t *rep = (USB_FFB_Report_SetEffect_t *)buffer;
+      uint8_t idx = rep->effectBlockIndex - 1;
       if (idx < MAX_EFFECTS) {
-        core0_ffb_effects[idx].type = report->effectType;
-        core0_ffb_effects[idx].gain = report->gain; // Gainを記録
+        core0_ffb_effects[idx].type = rep->effectType;
+        core0_ffb_effects[idx].gain = rep->gain;
       }
-      if (report->effectType == 0x26) {
-        _pid_debug.isConstantForce = true;
-        // SetEffect時のGainを暫定的なMagとして扱う（後のID:05で上書きされる可能性あり）
-        _pid_debug.magnitude = report->gain;
-      } else {
-        _pid_debug.isConstantForce = false;
+      _pid_debug.isConstantForce = (rep->effectType == HID_ET_CONSTANT);
+      _pid_debug.magnitude = rep->gain;
+      _pid_debug.updated = true;
+    }
+    break;
+  }
+  case HID_ID_SET_CONDITION: {
+    if (bufsize >= 1) {
+      USB_FFB_Report_SetCondition_t *rep =
+          (USB_FFB_Report_SetCondition_t *)buffer;
+      uint8_t idx = rep->effectBlockIndex - 1;
+      if (idx < MAX_EFFECTS) {
+        core0_ffb_effects[idx].cpOffset = rep->cpOffset;
+        core0_ffb_effects[idx].positiveCoeff = rep->positiveCoefficient;
       }
       _pid_debug.updated = true;
     }
     break;
   }
-
-  case 0x05: { // Set Constant Force Report
+  case HID_ID_SET_PERIODIC: {
+    if (bufsize >= 1) {
+      USB_FFB_Report_SetPeriodic_t *rep =
+          (USB_FFB_Report_SetPeriodic_t *)buffer;
+      uint8_t idx = rep->effectBlockIndex - 1;
+      if (idx < MAX_EFFECTS) {
+        core0_ffb_effects[idx].periodicMagnitude = rep->magnitude;
+        core0_ffb_effects[idx].periodicOffset = rep->offset;
+        core0_ffb_effects[idx].periodicPhase = rep->phase;
+        core0_ffb_effects[idx].periodicPeriod = rep->period;
+      }
+      _pid_debug.updated = true;
+    }
+    break;
+  }
+  case HID_ID_SET_CONSTANT_FORCE: {
     if (bufsize >= sizeof(USB_FFB_Report_SetConstantForce_t)) {
-      USB_FFB_Report_SetConstantForce_t *report =
+      USB_FFB_Report_SetConstantForce_t *rep =
           (USB_FFB_Report_SetConstantForce_t *)buffer;
-      uint8_t idx = report->effectBlockIndex - 1;
+      uint8_t idx = rep->effectBlockIndex - 1;
       if (idx < MAX_EFFECTS) {
-        // PCから届く -10000〜10000 の値を、内部用の -32767〜32767
-        // 等にスケーリング
-        core0_ffb_effects[idx].magnitude = report->magnitude;
+        core0_ffb_effects[idx].magnitude = rep->magnitude;
       }
-      _pid_debug.magnitude = report->magnitude;
+      _pid_debug.magnitude = rep->magnitude;
       _pid_debug.updated = true;
     }
     break;
   }
-
-  case 0x0A: { // Set Effect Operation Report
+  case HID_ID_EFFECT_OPERATION: {
     if (bufsize >= sizeof(USB_FFB_Report_EffectOperation_t)) {
-      USB_FFB_Report_EffectOperation_t *report =
+      USB_FFB_Report_EffectOperation_t *rep =
           (USB_FFB_Report_EffectOperation_t *)buffer;
-      uint8_t idx = report->effectBlockIndex - 1;
+      uint8_t idx = rep->effectBlockIndex - 1;
       if (idx < MAX_EFFECTS) {
-        if (report->operation == HID_OP_START)
+        if (rep->operation == HID_OP_START || rep->operation == HID_OP_SOLO)
           core0_ffb_effects[idx].active = true;
-        if (report->operation == HID_OP_STOP)
+        if (rep->operation == HID_OP_STOP)
           core0_ffb_effects[idx].active = false;
       }
-      _pid_debug.operation = report->operation;
-      _pid_debug.effectBlockIndex = report->effectBlockIndex;
+      _pid_debug.operation = rep->operation;
+      _pid_debug.effectBlockIndex = rep->effectBlockIndex;
       _pid_debug.updated = true;
     }
     break;
   }
-
-  case 0x0D: { // Device Gain Report
+  case HID_ID_PID_BLOCK_FREE: {
+    if (bufsize >= sizeof(USB_FFB_Report_PIDBlockFree_t)) {
+      USB_FFB_Report_PIDBlockFree_t *rep =
+          (USB_FFB_Report_PIDBlockFree_t *)buffer;
+      uint8_t idx = rep->effectBlockIndex - 1;
+      if (idx < MAX_EFFECTS) {
+        core0_ffb_effects[idx].active = false;
+        core0_ffb_effects[idx].magnitude = 0;
+        core0_ffb_effects[idx].type = 0;
+      }
+    }
+    break;
+  }
+  case HID_ID_DEVICE_CONTROL: {
+    if (bufsize >= sizeof(USB_FFB_Report_DeviceControl_t)) {
+      USB_FFB_Report_DeviceControl_t *rep =
+          (USB_FFB_Report_DeviceControl_t *)buffer;
+      if (rep->control == HID_DC_STOP_ALL_EFFECTS ||
+          rep->control == HID_DC_DEVICE_RESET) {
+        for (int i = 0; i < MAX_EFFECTS; i++) {
+          core0_ffb_effects[i].active = false;
+          core0_ffb_effects[i].magnitude = 0;
+        }
+        _next_block_index = 1;
+      }
+    }
+    break;
+  }
+  case HID_ID_DEVICE_GAIN: {
     if (bufsize >= sizeof(USB_FFB_Report_DeviceGain_t)) {
-      USB_FFB_Report_DeviceGain_t *report =
-          (USB_FFB_Report_DeviceGain_t *)buffer;
-      core0_global_gain = report->deviceGain;
+      USB_FFB_Report_DeviceGain_t *rep = (USB_FFB_Report_DeviceGain_t *)buffer;
+      core0_global_gain = rep->deviceGain;
       _pid_debug.deviceGain = core0_global_gain;
       _pid_debug.updated = true;
     }
     break;
   }
-
   default:
-    // 他のIDは現状無視
     break;
   }
 }
@@ -248,34 +347,29 @@ void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
 bool hidwffb_get_pid_debug_info(pid_debug_info_t *info) {
   if (!_pid_debug.updated)
     return false;
-
   if (info != NULL) {
     memcpy(info, &_pid_debug, sizeof(pid_debug_info_t));
   }
   _pid_debug.updated = false;
   return true;
 }
-/*
-双方向アクセスロジック
-Core 0 と Core 1 がお互いのデータを「安全に、かつ迅速に」読み書きするための関数
-*/
+
+// ============================================================================
+// Core間共有メモリ
+// ============================================================================
 FFB_Shared_State_t shared_ffb_effects[MAX_EFFECTS];
 volatile uint8_t shared_global_gain = 255;
 custom_gamepad_report_t shared_input_report;
 mutex_t ffb_shared_mutex;
 
-// --- Core間通信用構造体の初期化 ---
 void ffb_shared_memory_init() { mutex_init(&ffb_shared_mutex); }
 
-// --- Core 0 側: パース結果を共有メモリへ反映 ---
 void ffb_core0_update_shared(pid_debug_info_t *info) {
   if (mutex_enter_timeout_ms(&ffb_shared_mutex, 1)) {
     for (int i = 0; i < MAX_EFFECTS; i++) {
       shared_ffb_effects[i] = core0_ffb_effects[i];
-      // Core0 側でタイマー管理しているフラグを共有メモリに反映
       if (info != NULL) {
-        shared_ffb_effects[i].isCallBackTest =
-            info->updated; // 暫定：後ほど main.cpp で管理
+        shared_ffb_effects[i].isCallBackTest = info->updated;
       }
     }
     shared_global_gain = core0_global_gain;
@@ -283,16 +377,10 @@ void ffb_core0_update_shared(pid_debug_info_t *info) {
   }
 }
 
-// --- Core 1 側:
-// 物理入力を書き込み、FFB命令を読み出す。テスト時はループバックを実施 ---
-// --- Core 1 側: 物理入力(エンコーダ/ペダル)を書き込み、FFB命令を読み出す ---
 void ffb_core1_update_shared(custom_gamepad_report_t *new_input,
                              FFB_Shared_State_t *local_effects_dest) {
   if (mutex_enter_timeout_ms(&ffb_shared_mutex, 1)) {
-    // 1. Core 1 の結果を Core 0 へ渡す (物理入力)
     shared_input_report = *new_input;
-
-    // 2. Core 0 の命令を Core 1 へ持ってくる (FFB命令)
     for (int i = 0; i < MAX_EFFECTS; i++) {
       local_effects_dest[i] = shared_ffb_effects[i];
     }
@@ -302,57 +390,25 @@ void ffb_core1_update_shared(custom_gamepad_report_t *new_input,
 
 void hidwffb_loopback_test_sync(custom_gamepad_report_t *new_input,
                                 FFB_Shared_State_t *local_effects_dest) {
-  // 1. まず Core 0 から最新の命令を受け取る
   ffb_core1_update_shared(new_input, local_effects_dest);
-
 #ifdef CALLBACK_TEST_ENABLE
-  // 2. 受け取った命令に基づいて入力を捏造する (ループバック)
-  // isCallBackTest が true の間だけ多軸ループバックを実施
   if (local_effects_dest[0].isCallBackTest) {
     new_input->steer = local_effects_dest[0].magnitude;
     new_input->accel = local_effects_dest[0].gain;
-    new_input->brake = (int16_t)shared_global_gain; // uint8_t -> int16_t
+    new_input->brake = (uint16_t)shared_global_gain;
   } else {
-    // 通常時（またはテスト無効時）
-    if (local_effects_dest[0].active) {
-      new_input->steer = local_effects_dest[0].magnitude;
-    } else {
-      new_input->steer = 0;
-    }
+    new_input->steer =
+        local_effects_dest[0].active ? local_effects_dest[0].magnitude : 0;
     new_input->accel = 0;
     new_input->brake = 0;
   }
-
-  // デバッグ用
-  static int16_t last_mag = 0;
-  static bool last_cool = false;
-  if (local_effects_dest[0].magnitude != last_mag ||
-      local_effects_dest[0].isCallBackTest != last_cool) {
-    Serial.print("[CORE1_DEBUG] Mag:");
-    Serial.print(local_effects_dest[0].magnitude);
-    Serial.print(", CallBack:");
-    Serial.println(local_effects_dest[0].isCallBackTest);
-    last_mag = local_effects_dest[0].magnitude;
-    last_cool = local_effects_dest[0].isCallBackTest;
-  }
-#endif
-
-  // 3. 捏造した(または実際の)入力を Core 0 へ戻す
   if (mutex_enter_timeout_ms(&ffb_shared_mutex, 1)) {
     shared_input_report = *new_input;
     mutex_exit(&ffb_shared_mutex);
   }
+#endif
 }
 
-/**
- * @brief Core 0 側: 共有メモリから HID 送信用の入力レポートを読み出す
- *
- * Core 1
- * 側で取得された物理入力（またはテスト用の捏造入力）を共有メモリから読み出し、
- * Core 0 での USB HID 送信に使用します。
- *
- * @param[out] dest 取得した入力レポートを格納する構造体へのポインタ
- */
 void ffb_core0_get_input_report(custom_gamepad_report_t *dest) {
   if (mutex_enter_timeout_ms(&ffb_shared_mutex, 1)) {
     *dest = shared_input_report;
