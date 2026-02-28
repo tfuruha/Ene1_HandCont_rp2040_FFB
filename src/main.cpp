@@ -125,6 +125,30 @@ static int16_t scaleMagnitudeToTorque(int16_t magnitude, uint8_t deviceGain) {
                    0.5f);
 }
 
+/**
+ * @brief ステアリングエンコーダ値を HID X軸のフルレンジにスケーリングする
+ *
+ * MF4015 の生値（ANGLE_MIN～ANGLE_MAX）を
+ * DirectInput の X軸全レンジ（-32767～+32767）にマップする。
+ * 整数除算による桁落ちを防ぎ、float で演算してから四捨五入する。
+ *
+ * @param steerRaw  getSteerValue() の戻り値（ANGLE_MIN..ANGLE_MAX）
+ * @return          HID X軸の値（-32767..+32767）
+ */
+static int16_t scaleSteerToHid(int16_t steerRaw) {
+  static constexpr int32_t HID_MAX = 32767; // DirectInput X軸全レンジ
+  // クランプ
+  int32_t clamped = (int32_t)steerRaw;
+  if (clamped > Config::Steer::ANGLE_MAX)
+    clamped = Config::Steer::ANGLE_MAX;
+  if (clamped < Config::Steer::ANGLE_MIN)
+    clamped = Config::Steer::ANGLE_MIN;
+  // float でスケーリング（桁落ち防止）、符号を考慮した四捨五入
+  float scaled =
+      (float)clamped * (float)HID_MAX / (float)Config::Steer::ANGLE_MAX;
+  return (int16_t)(scaled + (scaled >= 0.0f ? 0.5f : -0.5f));
+}
+
 // ============================================================================
 // Core 1: 1ms 周期制御・CAN通信
 // ============================================================================
@@ -198,8 +222,9 @@ void loop1() {
       mfMotor.parseFrame(id, len, data);
     }
 
-    // 角位置取得（parseFrameで更新済み）
-    core1_input_report.steer = mfMotor.getSteerValue();
+    // 角位置取得（parseFrameで更新済み）、ANGLE_MIN～ANGLE_MAX → ±32767
+    // にスケーリング
+    core1_input_report.steer = scaleSteerToHid(mfMotor.getSteerValue());
 
     // AD変換値・スイッチ入力の最新値（フィルタ処理済み）を取得
     core1_input_report.accel = (int16_t)adAccel.getvalue();
@@ -231,7 +256,7 @@ void loop1() {
     int16_t torque =
         scaleMagnitudeToTorque(core1_effects[0].magnitude, shared_global_gain);
     sharedData.targetTorque = torque;
-    // torque += steerEffect.getEffect(); // テスト用に物理エフェクトのみ
+    torque += steerEffect.getEffect(); // 物理エフェクトを加算
     mfMotor.setTorque(torque);
   }
 
@@ -257,10 +282,10 @@ void loop1() {
     Serial.printf("[PHYS_INPUT] Steer:%d, Accel:%d, Brake:%d, Buttons:0x%04X\n",
                   core1_input_report.steer, core1_input_report.accel,
                   core1_input_report.brake, core1_input_report.buttons);
-    Serial.printf("[PID] effects[0].magnitude:%d\n",
-                  core1_effects[0].magnitude);
-    //  Serial.printf("[RAW_ADC] Accel:%d, Brake:%d\n", adAccel.getRawLatest(),
-    //                adBrake.getRawLatest());
+    // Serial.printf("[PID] effects[0].magnitude:%d\n",
+    //               core1_effects[0].magnitude);
+    Serial.printf("[RAW_ADC] Accel:%d, Brake:%d\n", adAccel.getRawLatest(),
+                  adBrake.getRawLatest());
   }
 #endif
 }

@@ -38,7 +38,7 @@ inline constexpr uint8_t DEVICE_ID = 1;   // MF4015デバイスID
 inline constexpr double ENCODER_COUNTS_PER_DEG = 65536.0 / 360.0;
 
 // 有効角度範囲 (0を中心とした片側角度, 単位: deg)
-inline constexpr double ANGLE_RANGE_DEG = 45.0;
+inline constexpr double ANGLE_RANGE_DEG = 30.0;
 
 // 有効角度範囲 (エンコーダカウント値, constexpr算出)
 inline constexpr int32_t ANGLE_MIN =
@@ -55,10 +55,10 @@ inline constexpr int16_t TORQUE_MAX = 1000;  // トルク電流指令値 最大
 
 // PhysicalEffect パラメータ（初期テスト用）
 inline constexpr float SPRING_COEFF =
-    0.05f * (float)TORQUE_MAX / (float)ANGLE_MAX;
+    0.01f * (float)TORQUE_MAX / (float)ANGLE_MAX;
 // バネ係数
 inline constexpr float FRICTION_COEFF = 0.0f;  // 摩擦係数（現状無効）
-inline constexpr float DAMPER_COEFF = 0.0002f; // ダンパー係数（現状無効）
+inline constexpr float DAMPER_COEFF = 0.0001f; // ダンパー係数（現状無効）
 inline constexpr float INERTIA_COEFF = 0.0f;   // 慣性係数（現状無効）
 } // namespace Steer
 
@@ -81,13 +81,13 @@ inline constexpr uint32_t USB_POLL_INTERVAL_MS = 5;
 // ============================================================================
 namespace Adc {
 inline constexpr uint16_t ACCEL_MIN = 180; // ADC最小値 (10bit基準)
-inline constexpr uint16_t ACCEL_MAX = 890; // ADC最大値 (10bit基準)
+inline constexpr uint16_t ACCEL_MAX = 400; // ADC最大値 (10bit基準)
 
 inline constexpr uint32_t ACCEL_HID_MIN = 0;
 inline constexpr uint32_t ACCEL_HID_MAX = 65535;
 
 inline constexpr uint16_t BRAKE_MIN = 100; // ADC最小値 (10bit基準)
-inline constexpr uint16_t BRAKE_MAX = 820; // ADC最大値 (10bit基準)
+inline constexpr uint16_t BRAKE_MAX = 750; // ADC最大値 (10bit基準)
 
 inline constexpr uint32_t BRAKE_HID_MIN = 0;
 inline constexpr uint32_t BRAKE_HID_MAX = 65535;
