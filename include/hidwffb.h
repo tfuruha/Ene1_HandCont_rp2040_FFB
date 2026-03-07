@@ -22,15 +22,15 @@
 #define HID_ID_SET_ENVELOPE 0x02  ///< Set Envelope Report
 #define HID_ID_SET_CONDITION 0x03 ///< Set Condition Report (Spring/Damper等)
 #define HID_ID_SET_PERIODIC 0x04  ///< Set Periodic Report (Sine/Square等)
-#define HID_ID_SET_CONSTANT_FORCE 0x05 ///< Set Constant Force Report
-#define HID_ID_SET_RAMP_FORCE 0x06     ///< Set Ramp Force Report
-#define HID_ID_CUSTOM_FORCE_DATA 0x07   ///< Custom Force Data Report
-#define HID_ID_DOWNLOAD_FORCE_SAMPLE 0x08///< Download Force Sample
-#define HID_ID_EFFECT_OPERATION 0x0A   ///< Effect Operation (Start/Stop)
-#define HID_ID_PID_BLOCK_FREE 0x0B     ///< PID Block Free Report
-#define HID_ID_DEVICE_CONTROL 0x0C     ///< PID Device Control
-#define HID_ID_DEVICE_GAIN 0x0D        ///< Device Gain Report
-#define HID_ID_SET_CUSTOM_FORCE 0x0E    ///< Set Custom Force Report
+#define HID_ID_SET_CONSTANT_FORCE 0x05    ///< Set Constant Force Report
+#define HID_ID_SET_RAMP_FORCE 0x06        ///< Set Ramp Force Report
+#define HID_ID_CUSTOM_FORCE_DATA 0x07     ///< Custom Force Data Report
+#define HID_ID_DOWNLOAD_FORCE_SAMPLE 0x08 ///< Download Force Sample
+#define HID_ID_EFFECT_OPERATION 0x0A      ///< Effect Operation (Start/Stop)
+#define HID_ID_PID_BLOCK_FREE 0x0B        ///< PID Block Free Report
+#define HID_ID_DEVICE_CONTROL 0x0C        ///< PID Device Control
+#define HID_ID_DEVICE_GAIN 0x0D           ///< Device Gain Report
+#define HID_ID_SET_CUSTOM_FORCE 0x0E      ///< Set Custom Force Report
 
 // --- Report IDs (Device -> Host: Input Reports) ---
 #define HID_ID_GAMEPAD_INPUT 0x01 ///< Joystick Input Report
@@ -53,7 +53,7 @@
 #define HID_ET_DAMPER 0x09   ///< ET Damper
 #define HID_ET_INERTIA 0x0A  ///< ET Inertia
 #define HID_ET_FRICTION 0x0B ///< ET Friction
-#define HID_ET_CUSTOM 0x0C ///< ET Custom Force Data
+#define HID_ET_CUSTOM 0x0C   ///< ET Custom Force Data
 
 // Effect Type の Usage値 (0x0F Usage Page)
 #define HID_ET_USAGE_CONSTANT 0x26
@@ -92,14 +92,14 @@
  * Core 1 -> Core 0 (物理入力/レポート用)
  */
 typedef struct {
-  uint8_t reportId;               ///< = 0x0E
+  uint8_t reportId; ///< = 0x0E
   uint8_t effectBlockIndex;
   uint8_t sampleCount;
   uint16_t samplePeriod;
 } __attribute__((packed)) USB_FFB_Report_SetCustomForce_t;
 
 typedef struct {
-  int16_t steer;    ///< ハンドル (X軸: 0x30) 符号付き16bit [-32767 to 32767]
+  int16_t steer; ///< ハンドル (X軸: 0x30) 符号付き16bit [-32767 to 32767]
   int16_t dummy_y;
   uint16_t accel;   ///< アクセル (Z軸: 0x32) 符号なし16bit [0 to 65535]
   uint16_t brake;   ///< ブレーキ (Rz軸: 0x35) 符号なし16bit [0 to 65535]
@@ -137,12 +137,12 @@ typedef struct {
  * @brief Set Envelope Output Report (ID: 0x02)
  */
 typedef struct {
-  uint8_t reportId;               ///< = 0x02
-  uint8_t effectBlockIndex;       ///< 1..40
+  uint8_t reportId;         ///< = 0x02
+  uint8_t effectBlockIndex; ///< 1..40
   uint16_t attackLevel;
   uint16_t fadeLevel;
-  uint32_t attackTime;            ///< ms
-  uint32_t fadeTime;              ///< ms
+  uint32_t attackTime; ///< ms
+  uint32_t fadeTime;   ///< ms
 } __attribute__((packed)) USB_FFB_Report_SetEnvelope_t;
 
 /**
@@ -150,9 +150,11 @@ typedef struct {
  *        Spring / Damper / Inertia / Friction 共通
  */
 typedef struct {
-  uint8_t reportId;               ///< = 0x03
-  uint8_t effectBlockIndex;       ///< 1..40
-  uint8_t parameterBlockOffset;   ///< bits: 0..3=parameterBlockOffset, 4..5=instance1, 6..7=instance2
+  uint8_t reportId;         ///< = 0x03
+  uint8_t effectBlockIndex; ///< 1..40
+  uint8_t
+      parameterBlockOffset; ///< bits:
+                            ///< 0..3=parameterBlockOffset, 4..5=instance1, 6..7=instance2
   int16_t cpOffset;
   int16_t positiveCoefficient;
   int16_t negativeCoefficient;
@@ -166,21 +168,21 @@ typedef struct {
  *        Sine / Square / Triangle / Sawtooth 共通
  */
 typedef struct {
-  uint8_t reportId;               ///< = 0x04
-  uint8_t effectBlockIndex;       ///< 1..40
+  uint8_t reportId;         ///< = 0x04
+  uint8_t effectBlockIndex; ///< 1..40
   uint16_t magnitude;
   int16_t offset;
-  uint16_t phase;                 ///< 0..35999
-  uint32_t period;                ///< 0..32767
+  uint16_t phase;  ///< 0..35999
+  uint32_t period; ///< 0..32767
 } __attribute__((packed)) USB_FFB_Report_SetPeriodic_t;
 
 /**
  * @brief Set Constant Force Output Report (ID: 0x05)
  */
 typedef struct {
-  uint8_t reportId;               ///< = 0x05
-  uint8_t effectBlockIndex;       ///< 1..40
-  int16_t magnitude;              ///< -10000..10000
+  uint8_t reportId;         ///< = 0x05
+  uint8_t effectBlockIndex; ///< 1..40
+  int16_t magnitude;        ///< -10000..10000
 } __attribute__((packed)) USB_FFB_Report_SetConstantForce_t;
 
 /**
@@ -243,10 +245,10 @@ typedef struct {
  * @brief PID Pool Feature Report (ID: 0x07, Feature - Device Info)
  */
 typedef struct {
-  uint8_t reportId;              ///< = 0x07
-  uint16_t ramPoolSize;          ///< RAM size
-  uint8_t simultaneousEffects;   ///< max simultaneous effects count
-  uint8_t memoryManagement;      ///< bit0=deviceManagedPool, bit1=sharedParamBlocks
+  uint8_t reportId;            ///< = 0x07
+  uint16_t ramPoolSize;        ///< RAM size
+  uint8_t simultaneousEffects; ///< max simultaneous effects count
+  uint8_t memoryManagement; ///< bit0=deviceManagedPool, bit1=sharedParamBlocks
 } __attribute__((packed)) USB_FFB_Feature_PIDPool_t;
 
 /**
@@ -268,14 +270,19 @@ typedef struct {
   int16_t magnitude;
   int16_t gain; ///< 0x01 で設定される Gain
   uint8_t type; ///< HID_ET_* の値
-  // Condition 系パラメータ
-  int16_t cpOffset;
-  int16_t positiveCoeff;
-  // Periodic 系パラメータ
-  uint16_t periodicMagnitude;
-  int16_t periodicOffset;
-  uint8_t periodicPhase;
-  uint16_t periodicPeriod;
+  // Condition 系パラメータ (SET_CONDITION Report から取得)
+  int16_t cpOffset;            ///< センター位置 (-10000..10000)
+  int16_t positiveCoeff;       ///< 正方向係数 (-10000..10000)
+  int16_t negativeCoeff;       ///< 負方向係数 (-10000..10000)
+  uint16_t positiveSaturation; ///< 正方向飽和値 (0..10000)
+  uint16_t negativeSaturation; ///< 負方向飽和値 (0..10000)
+  uint16_t deadBand;           ///< 不感帯幅 (0..10000)
+  // Periodic 系パラメータ (SET_PERIODIC Report から取得)
+  uint16_t periodicMagnitude; ///< 振幅 (0..10000)
+  int16_t periodicOffset;     ///< DCオフセット (-10000..10000)
+  uint16_t periodicPhase;     ///< 初期位相 (0..35999 centideg)
+  uint16_t periodicPeriod;    ///< 周期 (ms)
+  uint32_t startTimeUs; ///< エフェクト開始時刻 (μs, Core0 が micros() で記録)
   volatile bool active;
   volatile bool isCallBackTest; ///< テストモードフラグ
 } FFB_Shared_State_t;

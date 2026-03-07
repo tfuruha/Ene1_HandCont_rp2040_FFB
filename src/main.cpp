@@ -11,6 +11,7 @@
 #include "config.h"
 #include "config_manager.h"
 #include "control.h"
+#include "ffb_engine.h"
 #include "shared_data.h"
 #include "util.h"
 #include <Adafruit_TinyUSB.h>
@@ -46,6 +47,9 @@ static IntervalTrigger_u sampleTrigger(Config::Time::SAMPLING_INTERVAL_US);
 // ---
 static custom_gamepad_report_t core1_input_report = {0};
 static FFB_Shared_State_t core1_effects[MAX_EFFECTS];
+
+// --- FFB 演算エンジン (Core 1 で使用) ---
+static FFBEngine ffbEngine;
 
 // --- 物理エフェクト (Core 1 で使用) ---
 static PhysicalEffect steerEffect(Config::Steer::FRICTION_COEFF,
@@ -149,10 +153,6 @@ static int16_t scaleSteerToHid(int16_t steerRaw) {
   return (int16_t)(scaled + (scaled >= 0.0f ? 0.5f : -0.5f));
 }
 
-// ============================================================================
-// Core 1: 1ms 周期制御・CAN通信
-// ============================================================================
-
 void setup1() {
   // CANインターフェースのポインタをグローバルにも紐付け
   canBus = &canWrapper;
@@ -250,11 +250,13 @@ void loop1() {
     // 共有メモリから FFB 命令を取得し、入力レポートをCore0へ渡す
     ffb_core1_update_shared(&core1_input_report, core1_effects);
 
-    // トルク演算と送信
-    // PID magnitude (DirectInput ±10000) を TORQUE_MIN～TORQUE_MAX
-    // にスケーリング
+    // ================================================================
+    // トルク演算: 全アクティブエフェクトを合算 (FFBEngine)
+    // ================================================================
+    int32_t total_force =
+        ffbEngine.update(core1_effects, core1_input_report.steer);
     int16_t torque =
-        scaleMagnitudeToTorque(core1_effects[0].magnitude, shared_global_gain);
+        scaleMagnitudeToTorque((int16_t)total_force, shared_global_gain);
     sharedData.targetTorque = torque;
     torque += steerEffect.getEffect(); // 物理エフェクトを加算
     mfMotor.setTorque(torque);

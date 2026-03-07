@@ -231,7 +231,7 @@ void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
 
   switch (reportId) {
   case HID_ID_SET_EFFECT: {
-    if (bufsize >= 1) {
+    if (bufsize >= sizeof(USB_FFB_Report_SetEffect_t)) {
       USB_FFB_Report_SetEffect_t *rep = (USB_FFB_Report_SetEffect_t *)buffer;
       uint8_t idx = rep->effectBlockIndex - 1;
       if (idx < MAX_EFFECTS) {
@@ -245,20 +245,24 @@ void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
     break;
   }
   case HID_ID_SET_CONDITION: {
-    if (bufsize >= 1) {
+    if (bufsize >= sizeof(USB_FFB_Report_SetCondition_t)) {
       USB_FFB_Report_SetCondition_t *rep =
           (USB_FFB_Report_SetCondition_t *)buffer;
       uint8_t idx = rep->effectBlockIndex - 1;
       if (idx < MAX_EFFECTS) {
         core0_ffb_effects[idx].cpOffset = rep->cpOffset;
         core0_ffb_effects[idx].positiveCoeff = rep->positiveCoefficient;
+        core0_ffb_effects[idx].negativeCoeff = rep->negativeCoefficient;
+        core0_ffb_effects[idx].positiveSaturation = rep->positiveSaturation;
+        core0_ffb_effects[idx].negativeSaturation = rep->negativeSaturation;
+        core0_ffb_effects[idx].deadBand = rep->deadBand;
       }
       _pid_debug.updated = true;
     }
     break;
   }
   case HID_ID_SET_PERIODIC: {
-    if (bufsize >= 1) {
+    if (bufsize >= sizeof(USB_FFB_Report_SetPeriodic_t)) {
       USB_FFB_Report_SetPeriodic_t *rep =
           (USB_FFB_Report_SetPeriodic_t *)buffer;
       uint8_t idx = rep->effectBlockIndex - 1;
@@ -291,8 +295,11 @@ void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
           (USB_FFB_Report_EffectOperation_t *)buffer;
       uint8_t idx = rep->effectBlockIndex - 1;
       if (idx < MAX_EFFECTS) {
-        if (rep->operation == HID_OP_START || rep->operation == HID_OP_SOLO)
+        if (rep->operation == HID_OP_START || rep->operation == HID_OP_SOLO) {
           core0_ffb_effects[idx].active = true;
+          core0_ffb_effects[idx].startTimeUs =
+              micros(); // 波形位相計算用開始時刻
+        }
         if (rep->operation == HID_OP_STOP)
           core0_ffb_effects[idx].active = false;
       }
@@ -310,7 +317,19 @@ void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
       if (idx < MAX_EFFECTS) {
         core0_ffb_effects[idx].active = false;
         core0_ffb_effects[idx].magnitude = 0;
+        core0_ffb_effects[idx].gain = 0;
         core0_ffb_effects[idx].type = 0;
+        core0_ffb_effects[idx].cpOffset = 0;
+        core0_ffb_effects[idx].positiveCoeff = 0;
+        core0_ffb_effects[idx].periodicMagnitude = 0;
+        core0_ffb_effects[idx].periodicOffset = 0;
+        core0_ffb_effects[idx].periodicPhase = 0;
+        core0_ffb_effects[idx].periodicPeriod = 0;
+        // 解放されたスロットが最後に割り当てたものであれば、
+        // インデックスを巻き戻して再利用を可能にする
+        if (_next_block_index - 1 == rep->effectBlockIndex) {
+          _next_block_index = rep->effectBlockIndex;
+        }
       }
     }
     break;
