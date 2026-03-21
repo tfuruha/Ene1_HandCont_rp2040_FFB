@@ -2,68 +2,11 @@
 
 本ルールは、PlatformIOを用いた高品質な組み込みソフトウェア開発のためのガイドラインです。
 
-## 1. 基本方針（非ブロッキングと時間管理）
+## 1. 基本方針
 1. **優先順位**: 堅牢性・安全性 > 可読性 > 再利用性 > 保守性 > ファイルサイズ。
 2. **言語**: モダンC++ (C++17以上) を基本とし、型安全性を重視する。
 3. **完全非ブロッキング**: `delay()` の使用を厳禁し、すべてのイベントを「時間監視」と「状態遷移（FSM）」の組み合わせで処理せよ。
 4. **累積誤差の排除**: 定期実行タスクにおいて `millis() + INTERVAL` による次回の実行時刻計算を禁止する。実行時間のジッタと累積誤差を防ぐため、必ず `last_execution_time += INTERVAL` （前回の基準時刻への加算）の形式を採用し、長期的な周期精度を維持せよ。
-推奨例
-''' C++
-// include/utils.h
-/**
- * 非ブロッキング周期判定（累積誤差排除版）
- * @param last_us タスクごとの最終実行時刻（参照渡し）
- * @param interval_us 実行周期（マイクロ秒）
- */
-inline bool checkInterval(uint32_t &last_us, uint32_t interval_us) {
-    uint32_t now = micros();
-    if (now - last_us >= interval_us) {
-        last_us += interval_us; // 基準時刻をインターバル分進める
-        return true;
-    }
-    return false;
-}
-
-// src/main.cpp での使用例
-uint32_t motor_us = 0;
-uint32_t status_us = 0;
-static const uint32_t MOTOR_INTERVAL = 1000;
-static const uint32_t STATUS_INTERVAL = 100000;
-void setup() {
-    motor_us = micros();
-    status_us = micros();
-}
-void loop() {
-
-    // 1ms (1000us) 周期のモーター制御
-    if (checkInterval(motor_us, MOTOR_INTERVAL)) {
-        motor.update();
-    }
-
-    // 100ms (100000us) 周期のステータス出力
-    if (checkInterval(status_us, STATUS_INTERVAL)) {
-        Serial.println("System OK");
-    }
-}
-'''
-禁止例
-''' C++
-// src/main.cpp での使用 
-void loop() {
-  sendCanMessage();
-  delay(1); // 1ms待機（この間他の処理が止まるため禁止）
-}
-'''
-''' C++
-// src/main.cpp での使用 
-void loop() {
-  // 次の実行時刻まで他処理を待機させる（ブロッキング処理）
-  while (micros() < next_us) {
-    // 受信バッファの常時監視
-  }
-
-}
-'''
 
 ## 2. リアルタイム性とISR（割り込み）
 1. **ISR最小化の原則**: 外部割り込みやタイマー割り込み内の処理は、フラグセット、カウンタ更新、時刻記録（timestamp）のみに限定せよ。

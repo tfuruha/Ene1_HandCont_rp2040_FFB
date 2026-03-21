@@ -1,0 +1,5 @@
+# FFB Monitor - 依存パッケージ
+# インストール: pip install -r requirements.txt
+
+pyserial>=3.5
+matplotlib>=3.6

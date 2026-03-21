@@ -261,6 +261,7 @@ typedef struct {
   uint8_t deviceGain;
   uint8_t operation;        ///< 0x0A の operation
   uint8_t effectBlockIndex; ///< 0x0A の effectBlockIndex
+  bool active; ///< エフェクト再生中フラグ (operation が Start/Solo なら true)
   bool updated;
 } pid_debug_info_t;
 

@@ -119,7 +119,9 @@ inline constexpr uint32_t SERIAL_BAUDRATE = 115200;
 } // namespace Config
 
 // プリプロセッサフラグは明示的に残す
-#define BRAKE_INVERT true           // ブレーキの入力値を反転させる
-#define PHYSICAL_INPUT_DEBUG_ENABLE // 物理入力のデバッグを有効にする
+#define BRAKE_INVERT true // ブレーキの入力値を反転させる
+// #define PHYSICAL_INPUT_DEBUG_ENABLE // 物理入力のデバッグを有効にする
+#define FFB_DEBUG_ENABLE // FFBのデバッグを有効にする
+// #define CALLBACK_TEST_ENABLE // コールバックテストを有効にする
 
 #endif // CONFIG_H

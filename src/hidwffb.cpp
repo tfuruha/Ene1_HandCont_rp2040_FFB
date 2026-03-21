@@ -21,9 +21,50 @@ static volatile bool _ffb_updated = false;
 static pid_debug_info_t _pid_debug = {0, false, 0, 0, false};
 static FFB_Shared_State_t core0_ffb_effects[MAX_EFFECTS];
 static uint8_t core0_global_gain = 255;
-static uint8_t _next_block_index = 1; ///< 次に割り当てるスロット (1-based)
 static uint8_t _last_allocated_idx =
     0; ///< 直前に割り当てたスロット (PID Block Load応答用)
+static bool _slot_used[MAX_EFFECTS + 1] = {
+    false}; ///< スロット使用状況 (1-indexed)
+
+// ============================================================================
+// スロット管理ヘルパー (フリーリスト方式)
+// ============================================================================
+
+/**
+ * @brief 空きスロットを先頭から探して割り当てる
+ * @return 割り当てたスロット番号 (1-based)、空きなしの場合は 0
+ *
+ * _next_block_index の単調増加方式と異なり、PID_BLOCK_FREE で解放された
+ * スロットを即座に再利用できるため、長時間使用でも DIERR_DEVICEFULL が
+ * 発生しにくくなる。
+ */
+static uint8_t _alloc_slot() {
+  for (uint8_t i = 1; i <= MAX_EFFECTS; i++) {
+    if (!_slot_used[i]) {
+      _slot_used[i] = true;
+      Serial.print("[FFB] alloc slot="); Serial.println(i); // 対策B: 割当ログ
+      return i;
+    }
+  }
+  Serial.println("[FFB] alloc FULL!"); // 対策B: 満杯ログ
+  return 0; // 空きなし
+}
+
+/** @brief スロットを解放する */
+static void _free_slot(uint8_t idx) {
+  if (idx >= 1 && idx <= MAX_EFFECTS)
+    _slot_used[idx] = false;
+}
+
+/** @brief 空きスロット数を返す (PID Pool / Block Load 応答用) */
+static uint8_t _available_slots() {
+  uint8_t count = 0;
+  for (uint8_t i = 1; i <= MAX_EFFECTS; i++) {
+    if (!_slot_used[i])
+      count++;
+  }
+  return count;
+}
 
 // ============================================================================
 // Feature Report レスポンス生成
@@ -36,20 +77,21 @@ static uint8_t _last_allocated_idx =
  * どちらで呼ばれてもブロックを割り当てる。
  */
 static void _prepare_create_new_effect(uint8_t *buf, uint16_t *len) {
-  // GET Feature 0x05 でのブロック割当 (SET
-  // Featureで未割当の場合のフォールバック)
-  if (_last_allocated_idx == 0) {
-    if (_next_block_index <= MAX_EFFECTS) {
-      _last_allocated_idx = _next_block_index;
-      _next_block_index++;
-    }
-  }
+  // 対策C: GET Feature での二重割当フォールバックを廃止。
+  // Windows DirectInput は必ず SET Feature 0x05 → GET Feature 0x06 の順で
+  // シーケンスを送るため、SET Feature 側 (_hid_set_report_cb) のみで割当する。
+  Serial.print("[FFB] CreateNewEffect GET, last_alloc=");
+  Serial.println(_last_allocated_idx); // 対策B: 呼出ログ
   USB_FFB_Feature_CreateNewEffect_t resp;
   resp.reportId = HID_ID_CREATE_NEW_EFFECT;
   resp.effectType = 0;
   resp.byteCount = 0;
-  memcpy(buf, &resp, sizeof(resp));
-  *len = sizeof(resp);
+  // TinyUSBはget_report_cbのbufferにのreportIdを自動付加するため、
+  // reportIdを除いたペイロードのみをコピーする。
+  uint8_t *payload = (uint8_t *)&resp + 1; // reportIdの次のバイトから
+  uint16_t payloadLen = sizeof(resp) - 1;
+  memcpy(buf, payload, payloadLen);
+  *len = payloadLen;
 }
 
 /**
@@ -63,27 +105,47 @@ static void _prepare_pid_block_load(uint8_t *buf, uint16_t *len) {
   if (_last_allocated_idx > 0 && _last_allocated_idx <= MAX_EFFECTS) {
     resp.effectBlockIndex = _last_allocated_idx;
     resp.loadStatus = HID_BLOCK_LOAD_SUCCESS;
-    resp.ramPoolAvailable =
-        (uint16_t)(MAX_EFFECTS - (_next_block_index - 1)) * 10;
+    resp.ramPoolAvailable = (uint16_t)_available_slots() * 10;
   } else {
     resp.effectBlockIndex = 0;
     resp.loadStatus = HID_BLOCK_LOAD_FULL;
     resp.ramPoolAvailable = 0;
   }
+  Serial.print("[FFB] PIDBlockLoad: idx="); Serial.print(resp.effectBlockIndex);
+  Serial.print(" status="); Serial.println(resp.loadStatus);
   // 読み出し後はリセット (次回 Create New Effect で新たに割り当てる)
   _last_allocated_idx = 0;
-  memcpy(buf, &resp, sizeof(resp));
-  *len = sizeof(resp);
+  // TinyUSBはget_report_cbのbufferにのreportIdを自動付加するため、
+  // reportIdを除いたペイロードのみをコピーする。
+  uint8_t *payload = (uint8_t *)&resp + 1; // reportIdの次のバイトから
+  uint16_t payloadLen = sizeof(resp) - 1;
+  memcpy(buf, payload, payloadLen);
+  *len = payloadLen;
 }
 
 static void _prepare_pid_pool(uint8_t *buf, uint16_t *len) {
+  // 対策A: 参照実装 (FreeAllEffects) と同様に、PIDPool GET 時に全スロットを解放する。
+  // DirectInput は PIDPool 取得後にデバイスが全スロット空きの状態を期待している。
+  memset(_slot_used, 0, sizeof(_slot_used));
+  _last_allocated_idx = 0;
+  for (int i = 0; i < MAX_EFFECTS; i++) {
+    core0_ffb_effects[i].active    = false;
+    core0_ffb_effects[i].magnitude = 0;
+    core0_ffb_effects[i].type      = 0;
+    core0_ffb_effects[i].gain      = 0;
+  }
+  Serial.println("[FFB] PIDPool GET -> all slots reset"); // 対策B: リセットログ
   USB_FFB_Feature_PIDPool_t resp;
   resp.reportId = HID_ID_PID_POOL;
   resp.ramPoolSize = MAX_EFFECTS * 10;
   resp.simultaneousEffects = MAX_EFFECTS;
   resp.memoryManagement = 0; // Device managed = 0, shared params = 0
-  memcpy(buf, &resp, sizeof(resp));
-  *len = sizeof(resp);
+  // TinyUSBはget_report_cbのbufferにのreportIdを自動付加するため、
+  // reportIdを除いたペイロードのみをコピーする。
+  uint8_t *payload = (uint8_t *)&resp + 1; // reportIdの次のバイトから
+  uint16_t payloadLen = sizeof(resp) - 1;
+  memcpy(buf, payload, payloadLen);
+  *len = payloadLen;
 }
 
 // ============================================================================
@@ -139,10 +201,7 @@ static void _hid_set_report_cb(uint8_t report_id, hid_report_type_t report_type,
       // SET Feature でのブロック割当
       // 未割当の場合のみ割り当てる (GET側で割り当て済みの場合は上書きしない)
       if (_last_allocated_idx == 0) {
-        if (_next_block_index <= MAX_EFFECTS) {
-          _last_allocated_idx = _next_block_index;
-          _next_block_index++;
-        }
+        _last_allocated_idx = _alloc_slot(); // 0 なら空きなし
       }
     }
     // その他のFeature SETは無視 (PID Block LoadはGET専用)
@@ -222,15 +281,27 @@ void hidwffb_clear_ffb_flag(void) { _ffb_updated = false; }
 // PID レポートパーサ
 // ============================================================================
 
+static void print_raw_report_data(uint8_t const *buffer, uint16_t bufsize) {
+  for (uint16_t i = 0; i < bufsize; i++) {
+    if (buffer[i] < 0x10) {
+      Serial.print("0");
+    }
+    Serial.print(buffer[i], HEX);
+    Serial.print(" ");
+  }
+  Serial.println();
+}
+
 void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
   if (buffer == NULL || bufsize == 0)
     return;
 
   uint8_t reportId = buffer[0];
   _pid_debug.lastReportId = reportId;
+  print_raw_report_data(buffer, bufsize);
 
   switch (reportId) {
-  case HID_ID_SET_EFFECT: {
+  case HID_ID_SET_EFFECT: { // 0x01
     if (bufsize >= sizeof(USB_FFB_Report_SetEffect_t)) {
       USB_FFB_Report_SetEffect_t *rep = (USB_FFB_Report_SetEffect_t *)buffer;
       uint8_t idx = rep->effectBlockIndex - 1;
@@ -239,12 +310,12 @@ void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
         core0_ffb_effects[idx].gain = rep->gain;
       }
       _pid_debug.isConstantForce = (rep->effectType == HID_ET_CONSTANT);
-      _pid_debug.magnitude = rep->gain;
+      _pid_debug.effectBlockIndex = rep->effectBlockIndex;
       _pid_debug.updated = true;
     }
     break;
   }
-  case HID_ID_SET_CONDITION: {
+  case HID_ID_SET_CONDITION: { // 0x03
     if (bufsize >= sizeof(USB_FFB_Report_SetCondition_t)) {
       USB_FFB_Report_SetCondition_t *rep =
           (USB_FFB_Report_SetCondition_t *)buffer;
@@ -261,7 +332,7 @@ void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
     }
     break;
   }
-  case HID_ID_SET_PERIODIC: {
+  case HID_ID_SET_PERIODIC: { // 0x04
     if (bufsize >= sizeof(USB_FFB_Report_SetPeriodic_t)) {
       USB_FFB_Report_SetPeriodic_t *rep =
           (USB_FFB_Report_SetPeriodic_t *)buffer;
@@ -276,7 +347,7 @@ void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
     }
     break;
   }
-  case HID_ID_SET_CONSTANT_FORCE: {
+  case HID_ID_SET_CONSTANT_FORCE: { // 0x05
     if (bufsize >= sizeof(USB_FFB_Report_SetConstantForce_t)) {
       USB_FFB_Report_SetConstantForce_t *rep =
           (USB_FFB_Report_SetConstantForce_t *)buffer;
@@ -285,11 +356,12 @@ void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
         core0_ffb_effects[idx].magnitude = rep->magnitude;
       }
       _pid_debug.magnitude = rep->magnitude;
+      _pid_debug.effectBlockIndex = rep->effectBlockIndex;
       _pid_debug.updated = true;
     }
     break;
   }
-  case HID_ID_EFFECT_OPERATION: {
+  case HID_ID_EFFECT_OPERATION: { // 0x0A
     if (bufsize >= sizeof(USB_FFB_Report_EffectOperation_t)) {
       USB_FFB_Report_EffectOperation_t *rep =
           (USB_FFB_Report_EffectOperation_t *)buffer;
@@ -305,11 +377,13 @@ void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
       }
       _pid_debug.operation = rep->operation;
       _pid_debug.effectBlockIndex = rep->effectBlockIndex;
+      _pid_debug.active =
+          (rep->operation == HID_OP_START || rep->operation == HID_OP_SOLO);
       _pid_debug.updated = true;
     }
     break;
   }
-  case HID_ID_PID_BLOCK_FREE: {
+  case HID_ID_PID_BLOCK_FREE: { // 0x0B
     if (bufsize >= sizeof(USB_FFB_Report_PIDBlockFree_t)) {
       USB_FFB_Report_PIDBlockFree_t *rep =
           (USB_FFB_Report_PIDBlockFree_t *)buffer;
@@ -325,16 +399,13 @@ void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
         core0_ffb_effects[idx].periodicOffset = 0;
         core0_ffb_effects[idx].periodicPhase = 0;
         core0_ffb_effects[idx].periodicPeriod = 0;
-        // 解放されたスロットが最後に割り当てたものであれば、
-        // インデックスを巻き戻して再利用を可能にする
-        if (_next_block_index - 1 == rep->effectBlockIndex) {
-          _next_block_index = rep->effectBlockIndex;
-        }
+        _free_slot(rep->effectBlockIndex); // ビットマップでスロットを解放
+        _pid_debug.updated = true;
       }
     }
     break;
   }
-  case HID_ID_DEVICE_CONTROL: {
+  case HID_ID_DEVICE_CONTROL: { // 0x0C
     if (bufsize >= sizeof(USB_FFB_Report_DeviceControl_t)) {
       USB_FFB_Report_DeviceControl_t *rep =
           (USB_FFB_Report_DeviceControl_t *)buffer;
@@ -344,12 +415,14 @@ void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
           core0_ffb_effects[i].active = false;
           core0_ffb_effects[i].magnitude = 0;
         }
-        _next_block_index = 1;
+        memset(_slot_used, 0, sizeof(_slot_used)); // 全スロットを解放
+        _last_allocated_idx = 0; // 割り当て中スロットもリセット
+        _pid_debug.updated = true;
       }
     }
     break;
   }
-  case HID_ID_DEVICE_GAIN: {
+  case HID_ID_DEVICE_GAIN: { // 0x0D
     if (bufsize >= sizeof(USB_FFB_Report_DeviceGain_t)) {
       USB_FFB_Report_DeviceGain_t *rep = (USB_FFB_Report_DeviceGain_t *)buffer;
       core0_global_gain = rep->deviceGain;

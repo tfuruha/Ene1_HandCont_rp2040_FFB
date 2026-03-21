@@ -95,6 +95,13 @@ void loop() {
   // 2. PID 解析結果の共有 (FFB受信時)
   pid_debug_info_t pid_info;
   if (hidwffb_get_pid_debug_info(&pid_info)) {
+#ifdef FFB_DEBUG_ENABLE
+    Serial.printf(
+        "[FFB] ID:0x%02X Idx:%2d Mag:%6d Op:%d Gain:%3d Active:%d CF:%d\n",
+        pid_info.lastReportId, pid_info.effectBlockIndex, pid_info.magnitude,
+        pid_info.operation, pid_info.deviceGain, pid_info.active ? 1 : 0,
+        pid_info.isConstantForce ? 1 : 0);
+#endif
     // 解析結果（Gain, Magnitude等）を共有メモリへ
     ffb_core0_update_shared(&pid_info);
   }
@@ -286,8 +293,8 @@ void loop1() {
                   core1_input_report.brake, core1_input_report.buttons);
     // Serial.printf("[PID] effects[0].magnitude:%d\n",
     //               core1_effects[0].magnitude);
-    Serial.printf("[RAW_ADC] Accel:%d, Brake:%d\n", adAccel.getRawLatest(),
-                  adBrake.getRawLatest());
+    // Serial.printf("[RAW_ADC] Accel:%d, Brake:%d\n", adAccel.getRawLatest(),
+    //               adBrake.getRawLatest());
   }
 #endif
 }
