@@ -42,11 +42,15 @@ static uint8_t _alloc_slot() {
   for (uint8_t i = 1; i <= MAX_EFFECTS; i++) {
     if (!_slot_used[i]) {
       _slot_used[i] = true;
+#ifdef FFB_DEBUG_ENABLE
       Serial.print("[FFB] alloc slot="); Serial.println(i); // 対策B: 割当ログ
+#endif
       return i;
     }
   }
+#ifdef FFB_DEBUG_ENABLE
   Serial.println("[FFB] alloc FULL!"); // 対策B: 満杯ログ
+#endif
   return 0; // 空きなし
 }
 
@@ -80,8 +84,10 @@ static void _prepare_create_new_effect(uint8_t *buf, uint16_t *len) {
   // 対策C: GET Feature での二重割当フォールバックを廃止。
   // Windows DirectInput は必ず SET Feature 0x05 → GET Feature 0x06 の順で
   // シーケンスを送るため、SET Feature 側 (_hid_set_report_cb) のみで割当する。
+#ifdef FFB_DEBUG_ENABLE
   Serial.print("[FFB] CreateNewEffect GET, last_alloc=");
   Serial.println(_last_allocated_idx); // 対策B: 呼出ログ
+#endif
   USB_FFB_Feature_CreateNewEffect_t resp;
   resp.reportId = HID_ID_CREATE_NEW_EFFECT;
   resp.effectType = 0;
@@ -111,8 +117,10 @@ static void _prepare_pid_block_load(uint8_t *buf, uint16_t *len) {
     resp.loadStatus = HID_BLOCK_LOAD_FULL;
     resp.ramPoolAvailable = 0;
   }
+#ifdef FFB_DEBUG_ENABLE
   Serial.print("[FFB] PIDBlockLoad: idx="); Serial.print(resp.effectBlockIndex);
   Serial.print(" status="); Serial.println(resp.loadStatus);
+#endif
   // 読み出し後はリセット (次回 Create New Effect で新たに割り当てる)
   _last_allocated_idx = 0;
   // TinyUSBはget_report_cbのbufferにのreportIdを自動付加するため、
@@ -134,7 +142,9 @@ static void _prepare_pid_pool(uint8_t *buf, uint16_t *len) {
     core0_ffb_effects[i].type      = 0;
     core0_ffb_effects[i].gain      = 0;
   }
+#ifdef FFB_DEBUG_ENABLE
   Serial.println("[FFB] PIDPool GET -> all slots reset"); // 対策B: リセットログ
+#endif
   USB_FFB_Feature_PIDPool_t resp;
   resp.reportId = HID_ID_PID_POOL;
   resp.ramPoolSize = MAX_EFFECTS * 10;
@@ -281,6 +291,7 @@ void hidwffb_clear_ffb_flag(void) { _ffb_updated = false; }
 // PID レポートパーサ
 // ============================================================================
 
+#ifdef FFB_DEBUG_ENABLE
 static void print_raw_report_data(uint8_t const *buffer, uint16_t bufsize) {
   for (uint16_t i = 0; i < bufsize; i++) {
     if (buffer[i] < 0x10) {
@@ -291,6 +302,7 @@ static void print_raw_report_data(uint8_t const *buffer, uint16_t bufsize) {
   }
   Serial.println();
 }
+#endif
 
 void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
   if (buffer == NULL || bufsize == 0)
@@ -298,7 +310,9 @@ void PID_ParseReport(uint8_t const *buffer, uint16_t bufsize) {
 
   uint8_t reportId = buffer[0];
   _pid_debug.lastReportId = reportId;
+#ifdef FFB_DEBUG_ENABLE
   print_raw_report_data(buffer, bufsize);
+#endif
 
   switch (reportId) {
   case HID_ID_SET_EFFECT: { // 0x01
