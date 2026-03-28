@@ -14,7 +14,7 @@
 スイッチのチャタリングおよびノイズによる誤動作を防ぐため、デジタルフィルタを実装する。
 
 ### 3.1 アルゴリズム
-- **サンプリング**: 周期実行 (`Config::Time::SAMPLING_INTERVAL_MS` ms周期)。
+- **サンプリング**: 周期実行 (`Config::Time::SAMPLING_INTERVAL_US` us周期)。
 - **確定条件**: `DigitalInputChannel` クラスを使用。状態が変化するためには、あらかじめ設定された閾値（`Config::Input::BUTTON_DEBOUNCE_THRESHOLD = 4`）と同じ回数連続でその状態が検出される必要がある。
 - **実装**:
   - `HIGH`（非押下）が検出されるとカウンタをインクリメント（最大閾値まで）。閾値に達すると状態を `HIGH` に確定。
@@ -32,10 +32,10 @@
 3. **キャリブレーションとスケーリング**:
    - 出力範囲: USB HIDの仕様変更に伴い、16bit 符号なし範囲（0 ～ 65535）に変換。
    - **アクセル (Z軸)**:
-     - 入力範囲: `Config::Adc::ACCEL_MIN (180)` - `Config::Adc::ACCEL_MAX (890)`
+     - 入力範囲: `Config::Adc::ACCEL_MIN (180)` - `Config::Adc::ACCEL_MAX (400)`
      - 変換: `map(val, min, max, Config::Adc::ACCEL_HID_MIN, Config::Adc::ACCEL_HID_MAX)` を行い、`constrain` で範囲内に制限。
    - **ブレーキ (Rz軸)**:
-     - 入力範囲: `Config::Adc::BRAKE_MIN (100)` - `Config::Adc::BRAKE_MAX (820)`
+     - 入力範囲: `Config::Adc::BRAKE_MIN (100)` - `Config::Adc::BRAKE_MAX (750)`
      - 変換: `BRAKE_INVERT` が有効な場合、`map(val, min, max, Config::Adc::BRAKE_HID_MAX, Config::Adc::BRAKE_HID_MIN)` を用いて反転。踏み込み量 0 ～ 65535 に変換。
 
 ### 4.2 特徴

@@ -8,3 +8,7 @@ works
 build_log*
 plans
 localwork
+
+# Auto-added for repository publication
+.agent/
+.clangd/

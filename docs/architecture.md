@@ -11,11 +11,12 @@
 *   **Core 0 (通信/管理コア):**
     *   USB HID (TinyUSB) の維持。
     *   ホストPCからの FFB (Force Feedback) 信号の受信と解析。
-    *   `sharedData.targetTorque` の更新。
+    *   解析結果（PID情報）を共有メモリへ更新 (`ffb_core0_update_shared`)。
 *   **Core 1 (制御/計測コア):**
     *   1ms (1000us) 固定周期の制御ループ実行。
+    *   センサー（ステアリングエンコーダ、アクセル、ブレーキ）の状態取得とPC向け入力レポートの更新 (`ffb_core1_update_shared`)。
+    *   `FFBEngine` によるエフェクト合力演算と `sharedData.targetTorque` の算出。
     *   CANバス (MCP2515) を通じた MF4015 モーターへのコマンド送信。
-    *   センサー（ステアリングエンコーダ、アクセル、ブレーキ）の状態取得。
 
 ## 2. ソフトウェア・スタック
 
@@ -35,15 +36,21 @@
 
 ## 3. データ共有 (Shared Memory)
 
-Core間で共有される `SharedData` 構造体（`include/shared_data.h`）を介して通信を行う。
+Core間のデータ共有は目的に応じて以下の仕組みで行われる。
+
+### 3.1 HID / FFB 共有メモリ (`hidwffb.h`)
+物理入力およびFFBエフェクト情報は、ミューテックスを用いた専用の共有メモリ機構で安全に受け渡しされる。
+*   **PC向け入力:** Core 1 が `custom_gamepad_report_t` を更新し、Core 0 が送信。
+*   **PCからのFFB:** Core 0 がPID解析結果を書き込み、Core 1 が `FFB_Shared_State_t` の配列として読み出し。
+
+### 3.2 システムステータス (`include/shared_data.h`)
+`SharedData` 構造体はシステム全体のステータス確認用として機能する。
 
 | フィールド | 方向 | 説明 |
 | :--- | :--- | :--- |
-| `steeringAngle` | C1 → C0 | 現在のハンドル読取位置 |
-| `accelerator` | C1 → C0 | アクセルペダル値 |
-| `brake` | C1 → C0 | ブレーキペダル値 |
-| `buttons` | C1 → C0 | ボタン状態（シフト等） |
-| `targetTorque` | C0 → C1 | ホストからのFFB目標値 |
+| `targetTorque` | C1 → C0/その他 | C1で算出されたモータートルク指令値（監視用） |
+| `core1LoopCount` | C1 → C0/その他 | C1が正常動作しているか確認するカウンタ |
+| `lastCore1Micros` | C1 → C0/その他 | C1の最終実行時刻（タイムアウト検出用） |
 
 ## 4. 通信プロトコル仕様
 
