@@ -12,3 +12,4 @@ localwork
 # Auto-added for repository publication
 .agent/
 .clangd/
+compile_commands.json
