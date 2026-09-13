@@ -81,7 +81,7 @@ inline constexpr uint32_t USB_POLL_INTERVAL_MS = 5;
 // ============================================================================
 namespace Adc {
 inline constexpr uint16_t ACCEL_MIN = 180; // ADC最小値 (10bit基準)
-inline constexpr uint16_t ACCEL_MAX = 400; // ADC最大値 (10bit基準)
+inline constexpr uint16_t ACCEL_MAX = 820; // ADC最大値 (10bit基準)
 
 inline constexpr uint32_t ACCEL_HID_MIN = 0;
 inline constexpr uint32_t ACCEL_HID_MAX = 65535;
