@@ -483,15 +483,26 @@ void ffb_core0_update_shared(pid_debug_info_t *info) {
   }
 }
 
-void ffb_core1_update_shared(custom_gamepad_report_t *new_input,
-                             FFB_Shared_State_t *local_effects_dest) {
+void ffb_core1_update_input(const custom_gamepad_report_t *new_input) {
   if (mutex_enter_timeout_ms(&ffb_shared_mutex, 1)) {
     shared_input_report = *new_input;
+    mutex_exit(&ffb_shared_mutex);
+  }
+}
+
+void ffb_core1_get_effects(FFB_Shared_State_t *local_effects_dest) {
+  if (mutex_enter_timeout_ms(&ffb_shared_mutex, 1)) {
     for (int i = 0; i < MAX_EFFECTS; i++) {
       local_effects_dest[i] = shared_ffb_effects[i];
     }
     mutex_exit(&ffb_shared_mutex);
   }
+}
+
+void ffb_core1_update_shared(custom_gamepad_report_t *new_input,
+                             FFB_Shared_State_t *local_effects_dest) {
+  ffb_core1_update_input(new_input);
+  ffb_core1_get_effects(local_effects_dest);
 }
 
 void hidwffb_loopback_test_sync(custom_gamepad_report_t *new_input,

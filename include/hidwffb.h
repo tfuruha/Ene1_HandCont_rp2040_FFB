@@ -307,6 +307,8 @@ void ffb_core0_update_shared(pid_debug_info_t *info);
 void ffb_core0_get_input_report(custom_gamepad_report_t *dest);
 void ffb_core1_update_shared(custom_gamepad_report_t *new_input,
                              FFB_Shared_State_t *local_effects_dest);
+void ffb_core1_update_input(const custom_gamepad_report_t *new_input);
+void ffb_core1_get_effects(FFB_Shared_State_t *local_effects_dest);
 void hidwffb_loopback_test_sync(custom_gamepad_report_t *new_input,
                                 FFB_Shared_State_t *local_effects_dest);
 

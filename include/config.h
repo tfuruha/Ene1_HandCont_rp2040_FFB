@@ -73,7 +73,7 @@ inline constexpr uint32_t STEAR_CONT_INTERVAL_US = 1000;
 // HIDレポート送信周期 (ms) デバイス側の送信間隔(最大値)
 inline constexpr uint32_t HIDREPO_INTERVAL_MS = 1;
 // USB HID ポーリング周期 (ms) ホスト側のポーリング間隔(最大値)
-inline constexpr uint32_t USB_POLL_INTERVAL_MS = 5;
+inline constexpr uint32_t USB_POLL_INTERVAL_MS = 1;
 } // namespace Time
 
 // ============================================================================

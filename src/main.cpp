@@ -246,6 +246,9 @@ void loop1() {
 
     // トルク補正用の物理量計算
     steerEffect.update(core1_input_report.steer);
+
+    // CAN応答受信直後に、即座にCore0へ入力レポートを共有
+    ffb_core1_update_input(&core1_input_report);
   }
 
   // 2. ステアリング制御タイマートリガ (1000us周期)
@@ -254,8 +257,8 @@ void loop1() {
     sharedData.lastCore1Micros = micros();
     sharedData.core1LoopCount++;
 
-    // 共有メモリから FFB 命令を取得し、入力レポートをCore0へ渡す
-    ffb_core1_update_shared(&core1_input_report, core1_effects);
+    // Core0 から最新の FFB エフェクト状態を取得
+    ffb_core1_get_effects(core1_effects);
 
     // ================================================================
     // トルク演算: 全アクティブエフェクトを合算 (FFBEngine)
