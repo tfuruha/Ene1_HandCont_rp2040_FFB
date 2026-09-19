@@ -10,6 +10,7 @@ plans
 localwork
 
 # Auto-added for repository publication
-.agent/
+.agents/
 .clangd/
+.clangd
 compile_commands.json
